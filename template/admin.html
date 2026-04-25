@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='admin.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-datalabels@2.0.0"></script>
+</head>
+
+<body>
+    <div class="container">
+        <h1>Admin Dashboard</h1>
+
+        <button id="showMonthBtn" class="primary-btn">Show Month-wise Analysis</button>
+
+        <div class="stats-grid overall-section fadeable">
+            <div class="stat-card">
+                <h2>Total Requests</h2>
+                <p id="totalRequests">0</p>
+            </div>
+            <div class="stat-card">
+                <h2>Legitimate Requests</h2>
+                <p id="legitCount">0</p>
+            </div>
+            <div class="stat-card">
+                <h2>Malicious Requests</h2>
+                <p id="maliciousCount">0</p>
+            </div>
+            <div class="stat-card">
+                <h2>Honeypot Hits</h2>
+                <p id="honeypotHits">0</p>
+            </div>
+        </div>
+
+        <div class="charts-grid-top overall-section fadeable">
+            <div class="chart-section">
+                <h2>Request Distribution (Pie Chart)</h2>
+                <canvas id="requestChart"></canvas>
+            </div>
+
+            <div class="chart-section">
+                <h2>Requests by Method (Bar Chart)</h2>
+                <canvas id="methodChart"></canvas>
+                <p style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                    <strong>X-Axis:</strong> HTTP Methods (e.g., GET, POST) | <strong>Y-Axis:</strong> Total Number of
+                    Requests
+                </p>
+            </div>
+
+            <div class="chart-section">
+                <h2>Requests by Status Code (Bar Chart)</h2>
+                <canvas id="statusChart"></canvas>
+                <p style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                    <strong>X-Axis:</strong> HTTP Status Codes (e.g., 200, 404) | <strong>Y-Axis:</strong> Total Number
+                    of Requests
+                </p>
+            </div>
+        </div>
+
+        <div class="charts-grid-bottom overall-section fadeable">
+            <div class="chart-section">
+                <h2>Requests Over Time (Line Chart)</h2>
+                <canvas id="timeChart"></canvas>
+            </div>
+
+            <div class="chart-section" style="display: flex; flex-direction: column;">
+                <h2>Threat Radar (Attack Fingerprint)</h2>
+                <div style="flex: 1; min-height: 280px; position: relative;">
+                    <canvas id="threatRadarChart"></canvas>
+                </div>
+                <p style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                    <strong>Radial Axis:</strong> Frequency of Attack Type
+                </p>
+            </div>
+        </div>
+
+        <div class="chart-section fadeable" id="monthChartSection" style="display: none;">
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <h2>Total Requests</h2>
+                    <p id="totalRequestsMonthly">0</p>
+                </div>
+                <div class="stat-card">
+                    <h2>Legitimate Requests</h2>
+                    <p id="legitCountMonthly">0</p>
+                </div>
+                <div class="stat-card">
+                    <h2>Malicious Requests</h2>
+                    <p id="maliciousCountMonthly">0</p>
+                </div>
+                <div class="stat-card">
+                    <h2>Honeypot Hits</h2>
+                    <p id="honeypotHitsMonthly">0</p>
+                </div>
+            </div>
+            <div class="charts-grid monthly-grid">
+                <div class="chart-section">
+                    <h2>Request Distribution (Pie Chart)</h2>
+                    <canvas id="requestChartMonthly"></canvas>
+                </div>
+                <div class="chart-section">
+                    <h2>Requests by Method (Bar Chart)</h2>
+                    <canvas id="methodChartMonthly"></canvas>
+                    <p style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                        <strong>X-Axis:</strong> HTTP Methods (e.g., GET, POST) | <strong>Y-Axis:</strong> Total Number
+                        of Requests
+                    </p>
+                </div>
+                <div class="chart-section">
+                    <h2>Requests by Status Code (Bar Chart)</h2>
+                    <canvas id="statusChartMonthly"></canvas>
+                    <p style="font-size: 0.85em; color: #666; margin-top: 5px;">
+                        <strong>X-Axis:</strong> HTTP Status Codes (e.g., 200, 404) | <strong>Y-Axis:</strong> Total
+                        Number of Requests
+                    </p>
+                </div>
+                <div class="chart-section">
+                    <h2>Requests Over Time (Line Chart)</h2>
+                    <canvas id="timeChartMonthly"></canvas>
+                </div>
+                <div class="chart-section">
+                    <h2>Requests by Month</h2>
+                    <canvas id="monthChart"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <div class="events-section overall-section fadeable">
+            <h2>High Risk Events</h2>
+            <div class="scrollable-table-wrapper">
+                <table id="highRiskEventsTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>IP Address</th>
+                            <th>Path</th>
+                            <th>Risk Level</th>
+                            <th>Attack Type</th>
+                            <th>Payload</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for event in high_risk_events %}
+                        <tr>
+                            <td>{{ event.timestamp }}</td>
+                            <td>{{ event.ip }}</td>
+                            <td>{{ event.path }}</td>
+                            <td>{{ event.risk_level }}</td>
+                            <td>{{ event.attack_type }}</td>
+                            <td>{{ event.payload }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="events-section overall-section fadeable">
+            <h2>All Access Logs</h2>
+            <div class="scrollable-table-wrapper">
+                <table id="accessLogsTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>IP Address</th>
+                            <th>Method</th>
+                            <th>Path</th>
+                            <th>Status</th>
+                            <th>User Agent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in all_access_logs %}
+                        <tr>
+                            <td>{{ log.timestamp }}</td>
+                            <td>{{ log.ip }}</td>
+                            <td>{{ log.method }}</td>
+                            <td>{{ log.path }}</td>
+                            <td>{{ log.status }}</td>
+                            <td>{{ log.user_agent }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="events-section overall-section fadeable">
+            <h2>Request / Response Redirect Log</h2>
+            <div class="scrollable-table-wrapper">
+                <table id="redirectLogsTable">
+                    <thead>
+                        <tr>
+                            <th>Timestamp</th>
+                            <th>Request</th>
+                            <th>Target</th>
+                            <th>Verdict</th>
+                            <th>Reason</th>
+                            <th>IP Address</th>
+                            <th>User Agent</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {# Redirect logs populated by JavaScript #}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="overall-section fadeable" style="text-align:center; margin: 30px 0 10px;">
+            <button id="viewAttackPathBtn" class="primary-btn" style="background: linear-gradient(135deg, #dc3545, #c82333);">View Attack Path</button>
+        </div>
+
+        <div class="events-section overall-section fadeable" id="attackPathSection" style="display:none;">
+            <h2>Attack Path</h2>
+            <div id="attackPathMap" class="attack-path-map"></div>
+            <div class="scrollable-table-wrapper" style="margin-top:16px;">
+                <table id="attackPathTable">
+                    <thead>
+                        <tr>
+                            <th>Stage</th>
+                            <th>Path Attacked</th>
+                            <th>Attack Type</th>
+                            <th>Payload Captured</th>
+                            <th>Recommended Fix</th>
+                            <th>Status</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Fix It Summary Modal -->
+    <div id="fixItModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.55); z-index:1000; align-items:center; justify-content:center;">
+        <div style="background:#fff; border-radius:12px; max-width:620px; width:90%; max-height:80vh; overflow-y:auto; padding:28px 28px 20px; box-shadow:0 10px 40px rgba(0,0,0,0.25); position:relative;">
+            <button onclick="document.getElementById('fixItModal').style.display='none'" style="position:absolute;top:12px;right:16px;background:none;border:none;font-size:1.4rem;cursor:pointer;color:#888;">&#10005;</button>
+            <h2 style="color:#0056b3;margin-top:0;margin-bottom:18px;font-size:1.2rem;">&#128736; Vulnerability Summary &amp; Remediation</h2>
+
+            <div style="margin-bottom:16px;">
+                <strong style="color:#c82333;">Stage 1 — Reconnaissance</strong>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Issue:</b> Sensitive hints, internal paths, and developer notes exposed in HTML source code allow attackers to map the system before attacking.</p>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Fix:</b> Remove all HTML comments, hidden fields, and debug info from production pages. Enforce least information disclosure.</p>
+            </div>
+            <hr style="border:none;border-top:1px solid #eee;margin:10px 0;">
+
+            <div style="margin-bottom:16px;">
+                <strong style="color:#c82333;">Stage 2 — XSS / SSTI</strong>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Issue:</b> User input is reflected directly into the page without sanitization, allowing script injection and template expression execution.</p>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Fix:</b> Apply strict output encoding, implement Content Security Policy (CSP), and never evaluate user input as template expressions.</p>
+            </div>
+            <hr style="border:none;border-top:1px solid #eee;margin:10px 0;">
+
+            <div style="margin-bottom:16px;">
+                <strong style="color:#c82333;">Stage 3 — XXE (XML External Entity)</strong>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Issue:</b> The XML parser processes external entity declarations, allowing attackers to read internal files like <code>/etc/passwd</code>.</p>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Fix:</b> Disable external entity and DTD processing in the XML parser. Use JSON instead of XML where possible.</p>
+            </div>
+            <hr style="border:none;border-top:1px solid #eee;margin:10px 0;">
+
+            <div style="margin-bottom:16px;">
+                <strong style="color:#c82333;">Stage 4 — Insecure Deserialization</strong>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Issue:</b> The application deserializes untrusted user-supplied objects, enabling remote code execution or privilege escalation.</p>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Fix:</b> Never deserialize untrusted data. Use signed tokens (JWT) and strict type allow-lists instead of raw serialized objects.</p>
+            </div>
+            <hr style="border:none;border-top:1px solid #eee;margin:10px 0;">
+
+            <div style="margin-bottom:20px;">
+                <strong style="color:#c82333;">Stage 5 — SSRF (Server-Side Request Forgery)</strong>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Issue:</b> The server fetches URLs provided by the user, allowing attackers to access internal services and admin endpoints.</p>
+                <p style="margin:4px 0 0; color:#444; font-size:0.9rem;"><b>Fix:</b> Implement a URL allow-list, block private/internal IP ranges, and never pass user-controlled URLs directly to server-side requests.</p>
+            </div>
+
+            <div style="text-align:center; border-top:1px solid #eee; padding-top:16px;">
+                <button id="fixItActionBtn" class="primary-btn" style="margin:0;" onclick="window.open('/gemini_fixes_view','_blank','width=960,height=750,scrollbars=yes')">Get AI Fixes from Gemini</button>
+            </div>
+
+        </div>
+    </div>
+
+<script src="{{ url_for('static', filename='admin.js') }}"></script>
+</body>
+
+</html>

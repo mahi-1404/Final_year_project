@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CTF - Stage 2: Legacy Key</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ctf.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="ctf-card">
+            <h2>Stage 2: The Echo Chamber</h2>
+            <p>"The legacy system reflects everything you say back to you. Perhaps it reflects too much. Can you make it speak in ways it shouldn't?"</p>
+            <h3>Hint: XSS (Cross-Site Scripting) or SSTI (Server-Side Template Injection)</h3>
+            <form action="/legacy_login" method="post" class="ctf-form">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" placeholder="Enter username" required>
+                </div>
+                <div class="form-group">
+                    <label for="legacy_key">Legacy Key</label>
+                    <input type="text" id="legacy_key" name="legacy_key" placeholder="Enter legacy key" required>
+                </div>
+                <button type="submit" class="ctf-button">Access Legacy System</button>
+            </form>
+            <button class="fix-btn" onclick="var p=document.getElementById('fix2');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'▲ Hide Fix':'▶ Fix It'">▶ Fix It</button>
+            <div class="fix-panel" id="fix2">
+                <h4>Recommended Fix — XSS / SSTI</h4>
+                <p>Use strict output encoding on all user-supplied data before rendering it in HTML. Implement a Content Security Policy (CSP). Never evaluate template expressions built from user input — use sandboxed or logic-less templates and whitelist-based input validation.</p>
+            </div>
+            <p><a href="/stage1" class="back-link">Back to Stage 1</a></p>
+        </div>
+    </div>
+</body>
+</html>

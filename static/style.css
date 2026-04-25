@@ -1,0 +1,279 @@
+:root {
+    --dark-navy: #1a202c;
+    --charcoal: #2d3748;
+    --cyber-green: #00ff88;
+    --neon-cyan: #00ffff;
+    --text-color: #e2e8f0;
+    --border-color: #4a5568;
+    --card-bg: rgba(45, 55, 72, 0.7); /* semi-transparent charcoal */
+    --card-border: 1px solid rgba(0, 255, 255, 0.3);
+    --warning-red: #ef4444;
+}
+
+body {
+    font-family: 'Consolas', 'Menlo', 'Monaco', monospace;
+    margin: 0;
+    padding: 0;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    color: var(--text-color);
+    background-color: var(--dark-navy);
+    overflow-x: hidden;
+    position: relative;
+}
+
+/* Main Section */
+.main-section {
+    flex-grow: 1;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 30px;
+    gap: 40px; /* Space between left and right panels */
+}
+
+/* Login Card */
+.login-card {
+    background-color: var(--card-bg);
+    border: var(--card-border);
+    border-radius: 15px;
+    padding: 30px;
+    width: 100%;
+    max-width: 450px;
+    backdrop-filter: blur(10px);
+    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
+    transition: all 0.3s ease-in-out;
+    text-align: center; /* Center the form elements within the card */
+}
+
+.login-card h2 {
+    font-size: 2em;
+    color: var(--neon-cyan);
+    margin-bottom: 25px;
+    text-shadow: 0 0 8px var(--neon-cyan);
+}
+
+/* Form Styling */
+.form-group {
+    margin-bottom: 20px;
+    text-align: left; /* Align labels and inputs to the left within their group */
+}
+
+label {
+    display: block;
+    margin-bottom: 8px;
+    color: var(--text-color);
+    font-size: 0.95em;
+}
+
+input[type="text"],
+input[type="password"] {
+    width: calc(100% - 20px);
+    padding: 12px 10px;
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    background-color: var(--charcoal);
+    color: var(--text-color);
+    font-size: 1em;
+    outline: none;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+input[type="text"]:focus,
+input[type="password"]:focus {
+    border-color: var(--neon-cyan);
+    box-shadow: 0 0 8px rgba(0, 255, 255, 0.5);
+}
+
+.remember-me {
+    display: flex;
+    align-items: center;
+    margin-bottom: 25px;
+    justify-content: center; /* Center "Remember Me" checkbox */
+}
+
+.remember-me input[type="checkbox"] {
+    margin-right: 10px;
+    width: auto;
+}
+
+.primary-button {
+    width: 100%;
+    padding: 15px;
+    border: none;
+    border-radius: 8px;
+    font-size: 1.1em;
+    font-weight: bold;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    background-color: var(--cyber-green);
+    color: var(--dark-navy);
+    box-shadow: 0 0 15px rgba(0, 255, 136, 0.6);
+}
+
+.primary-button:hover {
+    background-color: #00e077;
+    box-shadow: 0 0 20px rgba(0, 255, 136, 0.8);
+    transform: translateY(-2px);
+}
+
+/* Top Bar */
+.top-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 15px 30px;
+    background-color: var(--charcoal);
+    border-bottom: 1px solid var(--border-color);
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+    z-index: 10;
+}
+
+.app-name {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 5px var(--neon-cyan);
+}
+
+.status-indicators {
+    font-size: 0.9em;
+}
+
+.status-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    margin-right: 5px;
+}
+
+.status-dot.production {
+    background-color: var(--cyber-green);
+    box-shadow: 0 0 8px var(--cyber-green);
+}
+
+/* Left Panel - Security Branding */
+.left-panel {
+    flex: 1;
+    max-width: 500px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: flex-start;
+    padding: 20px;
+}
+
+.security-branding {
+    text-align: left;
+    max-width: 400px;
+}
+
+.security-icon {
+    font-size: 4em;
+    display: block;
+    margin-bottom: 20px;
+    color: var(--neon-cyan);
+    text-shadow: 0 0 10px var(--neon-cyan);
+}
+
+.branding-title {
+    font-size: 2.5em;
+    color: var(--cyber-green);
+    text-shadow: 0 0 8px var(--cyber-green);
+    margin-bottom: 10px;
+}
+
+.branding-subtitle {
+    font-size: 1.1em;
+    color: var(--text-color);
+    line-height: 1.5;
+    margin-bottom: 30px;
+}
+
+/* Footer */
+.footer {
+    padding: 20px;
+    background-color: var(--charcoal);
+    border-top: 1px solid var(--border-color);
+    text-align: center;
+    font-size: 0.8em;
+    color: var(--text-color);
+    opacity: 0.8;
+    z-index: 10;
+}
+
+/* Responsiveness */
+@media (max-width: 900px) {
+    .main-section {
+        flex-direction: column;
+        padding: 20px;
+        gap: 20px;
+    }
+
+    .left-panel, .right-panel {
+        flex: none;
+        width: 100%;
+        max-width: 100%;
+        align-items: center; /* Center content on mobile */
+        text-align: center;
+    }
+
+    .security-branding {
+        max-width: 100%;
+        text-align: center;
+    }
+
+    .security-icon {
+        margin: 0 auto 20px auto; /* Center icon */
+    }
+
+    .branding-title {
+        font-size: 2em;
+    }
+
+    .branding-subtitle {
+        font-size: 1em;
+    }
+
+    .login-card {
+        padding: 25px;
+    }
+}
+
+@media (max-width: 500px) {
+    .top-bar {
+        flex-direction: column;
+        padding: 10px 15px;
+    }
+
+    .app-name {
+        margin-bottom: 10px;
+        font-size: 1.3em;
+    }
+
+    .status-indicators {
+        font-size: 0.8em;
+    }
+
+    .branding-title {
+        font-size: 1.8em;
+    }
+
+    .branding-subtitle {
+        font-size: 0.9em;
+    }
+
+    .login-card {
+        padding: 20px;
+        border-radius: 10px;
+    }
+
+    .primary-button {
+        padding: 12px;
+        font-size: 1em;
+    }
+}

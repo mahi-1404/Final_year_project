@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CTF - Stage 1: Reconnaissance</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ctf.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="ctf-card">
+            <h2>Operation Glass Fortress - Stage 1: The Ghost in the Machine</h2>
+            <p>Target: The "Terminus" Secure Gateway</p>
+            <p>Objective: Infiltrate the system, escalate privileges to Administrator, and exfiltrate the system root flag.</p>
+            <p>Your interface is currently locked out. Intelligence suggests that the developers were rushed during the migration from the old legacy system to this new interface. They may have left footprints behind.</p>
+            <p>Your goal is to move from the outside, to the inside, to the core.</p>
+            <h3>Hint: Check the source.</h3>
+            <p>Ready to proceed?</p>
+            <a href="/stage2" class="ctf-button">Proceed to Stage 2</a>
+            <br>
+            <button class="fix-btn" onclick="var p=document.getElementById('fix1');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'▲ Hide Fix':'▶ Fix It'">▶ Fix It</button>
+            <div class="fix-panel" id="fix1">
+                <h4>Recommended Fix — Reconnaissance</h4>
+                <p>Remove sensitive hints, credentials, and internal paths from HTML comments and page source. Enforce the principle of least information disclosure: never expose developer notes, legacy routes, or system details to the client.</p>
+            </div>
+        </div>
+    </div>
+</body>
+</html>

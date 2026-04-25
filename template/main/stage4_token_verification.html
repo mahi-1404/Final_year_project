@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CTF - Stage 4: Forged Signature</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ctf.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="ctf-card">
+            <h2>Stage 4: The Serialized State</h2>
+            <p>"The system stores session state as serialized objects. It deserializes them without question. What if the object contains instructions instead of data?"</p>
+            <h3>Hint: Insecure Deserialization (Java/Python/PHP)</h3>
+            <form action="/verify_token" method="post" class="ctf-form">
+                <div class="form-group">
+                    <label for="serialized_data">Serialized Session Data</label>
+                    <textarea id="serialized_data" name="serialized_data" rows="4" placeholder="Enter serialized data" required></textarea>
+                </div>
+                <button type="submit" class="ctf-button">Verify Session</button>
+            </form>
+            <button class="fix-btn" onclick="var p=document.getElementById('fix4');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'▲ Hide Fix':'▶ Fix It'">▶ Fix It</button>
+            <div class="fix-panel" id="fix4">
+                <h4>Recommended Fix — Insecure Deserialization</h4>
+                <p>Never deserialize untrusted data. Use signed, integrity-verified tokens (e.g., JWT with strong secrets) instead of raw serialized objects. Apply strict type allow-lists if deserialization is unavoidable, and run deserialization in a sandboxed context.</p>
+            </div>
+            <p><a href="/stage3" class="back-link">Back to Stage 3</a></p>
+        </div>
+    </div>
+</body>
+</html>

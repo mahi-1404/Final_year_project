@@ -1,0 +1,281 @@
+==================================================================================
+CTF ATTACK TYPES - COMPLETE CHANGELOG
+==================================================================================
+Date: December 20, 2025
+Change Type: Major Redesign - Diversified Attack Vectors
+Reason: Replaced similar-looking attacks with distinctly different vulnerability types
+
+
+==================================================================================
+STAGE 2 CHANGES - FROM SQL INJECTION TO XSS/SSTI
+==================================================================================
+
+OLD ATTACK TYPE:
+---------------
+- Attack: SQL Injection
+- Vulnerability: Database query manipulation
+- Example Payload: admin' OR '1'='1
+- Pattern: SQL operators and logic manipulation
+
+NEW ATTACK TYPE:
+---------------
+- Attack: Cross-Site Scripting (XSS) / Server-Side Template Injection (SSTI)
+- Vulnerability: Code injection through user input reflection
+- Example XSS Payloads:
+  * <script>alert(1)</script>
+  * <img src=x onerror=alert(1)>
+  * <svg onload=alert(1)>
+  * javascript:alert(1)
+  
+- Example SSTI Payloads:
+  * {{7*7}}
+  * ${7*7}
+  * #{7*7}
+  * %{7*7}
+
+FORM CHANGES:
+-------------
+- Changed legacy_key field from password type to text type
+- Updated hints and descriptions
+- Modified validation logic in app.py
+
+HTML FILE MODIFIED:
+------------------
+- template/main/stage2_legacy_login.html
+  * Updated title: "The Echo Chamber"
+  * New hint: "XSS or SSTI"
+  * Changed password field to text field
+
+BACKEND CHANGES (app.py):
+------------------------
+- Replaced SQL injection patterns with XSS/SSTI detection
+- New patterns detected:
+  * XSS: <script>, javascript:, onerror=, onload=, <img, <svg
+  * SSTI: {{, ${, #{, %{
+- Updated logging to reflect new attack type
+- Changed success condition from SQL patterns to XSS/SSTI patterns
+
+
+==================================================================================
+STAGE 3 CHANGES - FROM IDOR TO XXE
+==================================================================================
+
+OLD ATTACK TYPE:
+---------------
+- Attack: IDOR (Insecure Direct Object Reference)
+- Vulnerability: Direct access to resources by ID manipulation
+- Example Payload: user_id=1
+- Method: GET request with parameter
+
+NEW ATTACK TYPE:
+---------------
+- Attack: XXE (XML External Entity Injection)
+- Vulnerability: XML parser processes malicious external entities
+- Example Payload:
+  <?xml version="1.0" encoding="UTF-8"?>
+  <!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+  <userProfile>
+    <userId>&xxe;</userId>
+  </userProfile>
+
+FORM CHANGES:
+-------------
+- Changed from single input field (user_id) to textarea (xml_data)
+- Changed method from GET to POST
+- Added support for multi-line XML input
+
+HTML FILE MODIFIED:
+------------------
+- template/main/stage3_profile_lookup.html
+  * Updated title: "The XML Gateway"
+  * New hint: "XXE (XML External Entity Injection)"
+  * Replaced input field with textarea (6 rows)
+  * Changed method from GET to POST
+
+BACKEND CHANGES (app.py):
+------------------------
+- Changed route from GET to POST
+- Changed parameter from user_id to xml_data
+- New patterns detected: <!ENTITY, <!DOCTYPE, SYSTEM, file://, http://, PUBLIC
+- Updated logging to include XML data (truncated to 100 chars)
+- Changed success token to serialized object format
+- Updated response to reflect XXE success
+
+
+==================================================================================
+STAGE 4 CHANGES - FROM JWT TO INSECURE DESERIALIZATION
+==================================================================================
+
+OLD ATTACK TYPE:
+---------------
+- Attack: JWT Manipulation (None Algorithm)
+- Vulnerability: JWT signature bypass using 'none' algorithm
+- Example Payload: eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJ1c2VyIjoiYWRtaW4iLCJyb2xlIjoiYWRtaW4ifQ.
+
+NEW ATTACK TYPE:
+---------------
+- Attack: Insecure Deserialization
+- Vulnerability: Unsafe deserialization of untrusted data
+- Example Payloads:
+  * Java: rO0ABXNyABNqYXZhLnV0aWwuQXJyYXlMaXN0...
+  * Python: gANjb3MKc3lzdGVtCnEAWAUAAAB3aG9hbXEBhXECUnEDLg==
+  * PHP: O:8:"UserRole":1:{s:4:"role";s:5:"admin";}
+
+FORM CHANGES:
+-------------
+- Changed from single-line input to textarea
+- Changed field name from 'token' to 'serialized_data'
+- Added support for multi-line serialized objects
+
+HTML FILE MODIFIED:
+------------------
+- template/main/stage4_token_verification.html
+  * Updated title: "The Serialized State"
+  * New hint: "Insecure Deserialization (Java/Python/PHP)"
+  * Changed input field to textarea (4 rows)
+  * Changed field name from 'token' to 'serialized_data'
+
+BACKEND CHANGES (app.py):
+------------------------
+- Changed parameter from 'token' to 'serialized_data'
+- New patterns detected:
+  * rO0AB (Java serialization)
+  * gAN (Python pickle)
+  * O: (PHP serialization)
+  * __reduce__, Runtime.getRuntime, exec(, eval(
+- Updated logging to show data_length and truncate payload
+- Changed validation logic from JWT patterns to deserialization patterns
+
+
+==================================================================================
+STAGE 5 CHANGES - FROM COMMAND INJECTION TO SSRF
+==================================================================================
+
+OLD ATTACK TYPE:
+---------------
+- Attack: OS Command Injection
+- Vulnerability: Executing arbitrary system commands
+- Example Payload: 127.0.0.1; whoami
+- Patterns: ; | & && || ` $(
+
+NEW ATTACK TYPE:
+---------------
+- Attack: SSRF (Server-Side Request Forgery)
+- Vulnerability: Server makes requests to internal/unauthorized resources
+- Example Payloads:
+  * http://localhost/admin
+  * http://127.0.0.1/api/internal
+  * http://169.254.169.254/latest/meta-data/
+  * http://metadata.google.internal/
+  * file:///etc/passwd
+
+FORM CHANGES:
+-------------
+- Changed field name from 'ip_address' to 'target_url'
+- Changed placeholder to suggest URL format
+- Updated field purpose from ping to resource fetching
+
+HTML FILE MODIFIED:
+------------------
+- template/main/stage5_diagnostics.html
+  * Updated title: "The Request Forwarder"
+  * New hint: "SSRF (Server-Side Request Forgery)"
+  * Changed field name from 'ip_address' to 'target_url'
+  * Updated placeholder text
+
+BACKEND CHANGES (app.py):
+------------------------
+- Changed parameter from 'ip_address' to 'target_url'
+- New patterns detected:
+  * localhost, 127.0.0.1, 0.0.0.0
+  * 169.254.169.254 (AWS metadata)
+  * metadata.google.internal (GCP metadata)
+  * Private IP ranges: 10., 172.16., 192.168.
+  * file://, gopher:// protocols
+- Updated logging to reflect SSRF attack type
+- Changed success message and flag
+- Modified response to simulate URL fetching
+
+
+==================================================================================
+FINAL FLAG CHANGE
+==================================================================================
+
+OLD FLAG: CTF{Y0u_H4v3_M4st3r3d_Th3_Ar7}
+NEW FLAG: CTF{5_D1ff3r3nt_4tt4ck_V3ct0rs_M4st3r3d}
+
+Reason: New flag reflects the diversity of attack vectors
+
+
+==================================================================================
+LOGGING CHANGES (ALL STAGES)
+==================================================================================
+
+All stages now log:
+- Full request path
+- HTTP method
+- Complete payload data
+- Attack type classification
+- Success/failure status
+- IP address and user agent
+
+Log Format Examples:
+-------------------
+Stage 2: STAGE2_COMPROMISE path=/legacy_login ip=x.x.x.x method=XSS attack_type=Cross_Site_Scripting payload="..." status=SUCCESS
+Stage 3: STAGE3_COMPROMISE path=/profile ip=x.x.x.x method=XXE attack_type=XML_External_Entity payload="..." status=SUCCESS
+Stage 4: STAGE4_COMPROMISE path=/verify_token ip=x.x.x.x method=Deserialization attack_type=Insecure_Deserialization payload="..." status=SUCCESS
+Stage 5: STAGE5_COMPROMISE path=/diagnose ip=x.x.x.x method=SSRF attack_type=Server_Side_Request_Forgery payload="..." status=SUCCESS
+
+
+==================================================================================
+FILES MODIFIED SUMMARY
+==================================================================================
+
+Python Backend:
+--------------
+1. app.py - All stage endpoint handlers completely rewritten
+
+HTML Templates:
+--------------
+1. template/main/stage2_legacy_login.html - Complete redesign
+2. template/main/stage3_profile_lookup.html - Complete redesign
+3. template/main/stage4_token_verification.html - Complete redesign
+4. template/main/stage5_diagnostics.html - Complete redesign
+
+Documentation:
+-------------
+1. CTF_SOLUTIONS.txt - Updated with all new attack solutions
+2. ATTACK_TYPES_CHANGELOG.txt - This file (newly created)
+
+
+==================================================================================
+EDUCATIONAL BENEFITS
+==================================================================================
+
+The new design teaches players about 5 completely different attack vectors:
+
+1. RECONNAISSANCE - Information gathering and OSINT
+2. XSS/SSTI - Client-side and server-side injection attacks
+3. XXE - XML-based vulnerabilities and file disclosure
+4. DESERIALIZATION - Object deserialization exploits
+5. SSRF - Server-side request forgery and internal network access
+
+Each attack requires different thinking, tools, and techniques, providing
+a more comprehensive security education experience.
+
+
+==================================================================================
+TESTING RECOMMENDATIONS
+==================================================================================
+
+Before deployment, test each stage with:
+1. Valid attack payloads (see CTF_SOLUTIONS.txt)
+2. Invalid payloads to ensure proper rejection
+3. Edge cases (empty inputs, very long inputs, special characters)
+4. Log verification to ensure all data is captured correctly
+5. Cross-browser compatibility for XSS payloads
+
+
+==================================================================================
+END OF CHANGELOG
+==================================================================================

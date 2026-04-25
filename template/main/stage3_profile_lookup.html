@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CTF - Stage 3: Identity Drift</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='ctf.css') }}">
+</head>
+<body>
+    <div class="container">
+        <div class="ctf-card">
+            <h2>Stage 3: The XML Gateway</h2>
+            <p>"The system accepts XML data for profile lookup. It trusts external entities... perhaps too much. Can you make it read things it shouldn't?"</p>
+            <h3>Hint: XXE (XML External Entity Injection)</h3>
+            <form action="/profile" method="post" class="ctf-form">
+                <div class="form-group">
+                    <label for="xml_data">XML Profile Data</label>
+                    <textarea id="xml_data" name="xml_data" rows="6" placeholder="Enter XML data" required></textarea>
+                </div>
+                <button type="submit" class="ctf-button">Submit XML</button>
+            </form>
+            <button class="fix-btn" onclick="var p=document.getElementById('fix3');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'▲ Hide Fix':'▶ Fix It'">▶ Fix It</button>
+            <div class="fix-panel" id="fix3">
+                <h4>Recommended Fix — XXE (XML External Entity)</h4>
+                <p>Disable external entity and DTD processing in your XML parser (e.g., set <code>FEATURE_EXTERNAL_GENERAL_ENTITIES</code> to false). Use a safe XML library or JSON instead of XML where possible. Never parse untrusted XML with default parser settings.</p>
+            </div>
+            <p><a href="/stage2" class="back-link">Back to Stage 2</a></p>
+        </div>
+    </div>
+</body>
+</html>

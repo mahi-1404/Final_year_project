@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>AI Vulnerability Fix Report</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            background: #f4f6f9;
+            color: #1a1a2e;
+            font-family: 'Segoe UI', Arial, sans-serif;
+            font-size: 0.9rem;
+            padding: 30px;
+            min-height: 100vh;
+        }
+
+        .header {
+            background: #1a1a2e;
+            color: #fff;
+            padding: 18px 24px;
+            border-radius: 8px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .header h1 {
+            font-size: 1.05rem;
+            font-weight: 600;
+            letter-spacing: 0.03em;
+        }
+
+        .header .meta {
+            font-size: 0.78rem;
+            color: #a0aec0;
+        }
+
+        .model-tag {
+            background: #2d3748;
+            border: 1px solid #4a5568;
+            color: #90cdf4;
+            font-size: 0.72rem;
+            padding: 3px 10px;
+            border-radius: 4px;
+            font-weight: 500;
+        }
+
+        .status-bar {
+            text-align: center;
+            color: #2b6cb0;
+            font-size: 0.85rem;
+            margin-bottom: 20px;
+            padding: 10px;
+            background: #ebf8ff;
+            border: 1px solid #bee3f8;
+            border-radius: 6px;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .stage-block {
+            margin-bottom: 24px;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+            background: #fff;
+            box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+        }
+
+        .stage-header {
+            background: #1a1a2e;
+            padding: 10px 18px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .stage-badge {
+            background: #c53030;
+            color: #fff;
+            font-size: 0.72rem;
+            padding: 2px 10px;
+            border-radius: 3px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+        }
+
+        .stage-title {
+            color: #fbd38d;
+            font-weight: 600;
+            font-size: 0.88rem;
+        }
+
+        .file-ref {
+            margin-left: auto;
+            font-size: 0.72rem;
+            color: #718096;
+            font-family: 'Courier New', monospace;
+        }
+
+        .section-label {
+            font-size: 0.7rem;
+            padding: 5px 18px;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .sent-label {
+            background: #edf2f7;
+            color: #718096;
+            border-bottom: 1px solid #e2e8f0;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .code-block {
+            background: #1e2533;
+            padding: 14px 18px;
+            white-space: pre-wrap;
+            color: #e2e8f0;
+            font-size: 0.78rem;
+            font-family: 'Courier New', monospace;
+            line-height: 1.7;
+            border-bottom: 1px solid #e2e8f0;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+
+        .fix-label {
+            background: #f0fff4;
+            color: #276749;
+            border-bottom: 1px solid #c6f6d5;
+            border-top: 1px solid #c6f6d5;
+        }
+
+        .fix-block {
+            background: #fff;
+            padding: 16px 18px;
+            color: #2d3748;
+            font-size: 0.88rem;
+            line-height: 1.8;
+        }
+
+        .fix-block .explanation {
+            white-space: pre-wrap;
+            margin-bottom: 14px;
+            color: #4a5568;
+        }
+
+        .fix-block .fixed-code-label {
+            font-size: 0.7rem;
+            color: #2b6cb0;
+            letter-spacing: 0.1em;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        .fix-block pre {
+            background: #1e2533;
+            border: 1px solid #e2e8f0;
+            border-radius: 5px;
+            padding: 12px 14px;
+            white-space: pre-wrap;
+            color: #90cdf4;
+            font-family: 'Courier New', monospace;
+            font-size: 0.78rem;
+            line-height: 1.6;
+            overflow-x: auto;
+        }
+
+        .fix-block.loading {
+            color: #2b6cb0;
+            font-style: italic;
+            animation: pulse 1.2s infinite;
+        }
+
+        .done-bar {
+            text-align: center;
+            margin-top: 24px;
+            color: #276749;
+            font-size: 0.88rem;
+            padding: 12px;
+            border: 1px solid #c6f6d5;
+            border-radius: 6px;
+            background: #f0fff4;
+            font-weight: 600;
+            display: none;
+        }
+
+        .skeleton {
+            background: #e2e8f0;
+            border-radius: 4px;
+            height: 13px;
+            margin-bottom: 8px;
+            animation: pulse 1.2s infinite;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <h1>AI-Powered Vulnerability Fix Report</h1>
+        <div style="display:flex; align-items:center; gap:10px;">
+            <span class="model-tag">llama-3.3-70b · Groq</span>
+            <span class="meta" id="timestamp"></span>
+        </div>
+    </div>
+
+    <div class="status-bar" id="statusBar">Reading source files and connecting to AI...</div>
+
+    <div id="stagesContainer"></div>
+
+    <div class="done-bar" id="doneBar">Analysis complete. All 5 vulnerability fixes retrieved successfully.</div>
+
+    <div style="text-align:center; margin-top: 30px; margin-bottom: 40px;">
+        <button id="applyBtn" onclick="applyChanges()" style="
+            background: #276749;
+            color: #fff;
+            border: none;
+            padding: 14px 40px;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 8px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(39,103,73,0.3);
+            letter-spacing: 0.04em;
+            transition: background 0.2s;
+        " onmouseover="this.style.background='#1f5438'" onmouseout="this.style.background='#276749'">
+            ⚙ Apply Changes
+        </button>
+        <div id="applyStatus" style="margin-top: 12px; font-size: 0.85rem; color: #718096;"></div>
+    </div>
+
+    <script>
+        document.getElementById('timestamp').textContent = new Date().toLocaleString();
+
+        function escapeHtml(text) {
+            return text.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+        }
+
+        function createSkeletonBlock(stage) {
+            const block = document.createElement('div');
+            block.className = 'stage-block';
+            block.id = `stage-block-${stage}`;
+            block.innerHTML = `
+                <div class="stage-header">
+                    <span class="stage-badge">Stage ${stage}</span>
+                    <span class="stage-title" style="color:#718096;">Loading...</span>
+                </div>
+                <div class="section-label sent-label">Vulnerable Code</div>
+                <div class="code-block" id="code-${stage}">
+                    <div class="skeleton" style="width:70%; background:#2d3748;"></div>
+                    <div class="skeleton" style="width:90%; background:#2d3748;"></div>
+                    <div class="skeleton" style="width:55%; background:#2d3748;"></div>
+                </div>
+                <div class="section-label fix-label">AI Fix Suggestion</div>
+                <div class="fix-block loading" id="fix-${stage}">Waiting for AI response...</div>
+            `;
+            return block;
+        }
+
+        function fillStageBlock(fix) {
+            const block = document.getElementById(`stage-block-${fix.stage}`);
+            block.querySelector('.stage-title').textContent = fix.type;
+            block.querySelector('.stage-title').style.color = '#fbd38d';
+
+            const fileRef = document.createElement('span');
+            fileRef.className = 'file-ref';
+            fileRef.textContent = `${fix.file}  (lines ${fix.lines[0]} - ${fix.lines[1]})`;
+            block.querySelector('.stage-header').appendChild(fileRef);
+
+            document.getElementById(`code-${fix.stage}`).textContent = fix.code;
+
+            const fixEl = document.getElementById(`fix-${fix.stage}`);
+            fixEl.className = 'fix-block';
+
+            const codeMatch = fix.suggestion.match(/Fixed Code:\s*```[\w]*\n([\s\S]*?)```/i);
+            const explanationText = fix.suggestion.replace(/Fixed Code:\s*```[\w]*\n[\s\S]*?```/i, '').trim();
+
+            let html = `<div class="explanation">${escapeHtml(explanationText)}</div>`;
+            if (codeMatch) {
+                html += `<div class="fixed-code-label">Recommended Fix</div>`;
+                html += `<pre>${escapeHtml(codeMatch[1].trim())}</pre>`;
+            }
+            fixEl.innerHTML = html;
+        }
+
+        async function loadFixes() {
+            const container = document.getElementById('stagesContainer');
+            const statusBar = document.getElementById('statusBar');
+
+            for (let i = 1; i <= 5; i++) {
+                container.appendChild(createSkeletonBlock(i));
+            }
+
+            statusBar.textContent = 'Sending source code to AI model for analysis...';
+
+            try {
+                const res = await fetch('/get_fixes');
+                const data = await res.json();
+
+                if (data.error) throw new Error(data.error);
+                if (!data.fixes || !Array.isArray(data.fixes)) throw new Error('Unexpected response from server');
+
+                data.fixes.forEach(fix => fillStageBlock(fix));
+
+                statusBar.style.animation = 'none';
+                statusBar.style.background = '#f0fff4';
+                statusBar.style.borderColor = '#c6f6d5';
+                statusBar.style.color = '#276749';
+                statusBar.textContent = 'Analysis complete. All fixes retrieved from AI model.';
+                document.getElementById('doneBar').style.display = 'block';
+
+            } catch (err) {
+                statusBar.style.background = '#fff5f5';
+                statusBar.style.borderColor = '#fed7d7';
+                statusBar.style.color = '#c53030';
+                statusBar.style.animation = 'none';
+                statusBar.textContent = 'Error: ' + err.message;
+            }
+        }
+
+        loadFixes();
+
+        async function applyChanges() {
+            const btn = document.getElementById('applyBtn');
+            const status = document.getElementById('applyStatus');
+            btn.disabled = true;
+            btn.textContent = '⏳ Applying...';
+            status.textContent = 'Deploying patches...';
+            try {
+                await fetch('/open_terminal', { method: 'POST' });
+                btn.textContent = '✔ Changes Applied';
+                btn.style.background = '#2b6cb0';
+                status.textContent = 'Patch deployment initiated. Check the terminal window.';
+            } catch (err) {
+                btn.disabled = false;
+                btn.textContent = '⚙ Apply Changes';
+                status.textContent = 'Error: ' + err.message;
+            }
+        }
+    </script>
+</body>
+</html>
