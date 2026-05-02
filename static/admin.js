@@ -1,7 +1,52 @@
 document.addEventListener('DOMContentLoaded', function () {
     fetchAdminData();
+    loadFixesStatus();
     // Refresh data every 10 seconds
     setInterval(fetchAdminData, 10000);
+
+function loadFixesStatus() {
+    fetch('/fixes_status')
+        .then(r => r.json())
+        .then(data => {
+            const content = document.getElementById('fixesStatusContent');
+            const appliedAt = document.getElementById('fixesAppliedAt');
+
+            if (!data.fixes || data.fixes.length === 0) return;
+
+            appliedAt.textContent = 'Applied at: ' + data.applied_at;
+
+            const statusColors = { applied: '#276749', skipped: '#b7791f', error: '#c53030' };
+            const statusIcons  = { applied: '✔ Fixed', skipped: '⚠ Skipped', error: '✘ Error' };
+
+            let html = '<table style="width:100%;border-collapse:collapse;font-size:0.88rem;">';
+            html += '<thead><tr style="background:#1a1a2e;color:#fff;">'
+                  + '<th style="padding:10px 14px;text-align:left;">Stage</th>'
+                  + '<th style="padding:10px 14px;text-align:left;">Vulnerability</th>'
+                  + '<th style="padding:10px 14px;text-align:left;">File</th>'
+                  + '<th style="padding:10px 14px;text-align:left;">What Was Fixed</th>'
+                  + '<th style="padding:10px 14px;text-align:center;">Status</th>'
+                  + '</tr></thead><tbody>';
+
+            data.fixes.forEach((fix, i) => {
+                const bg = i % 2 === 0 ? '#f9f9fc' : '#fff';
+                const color = statusColors[fix.status] || '#555';
+                const icon  = statusIcons[fix.status]  || fix.status;
+                html += `<tr style="background:${bg};">
+                    <td style="padding:10px 14px;font-weight:600;">Stage ${fix.stage}</td>
+                    <td style="padding:10px 14px;">${fix.type}</td>
+                    <td style="padding:10px 14px;font-family:monospace;font-size:0.8rem;color:#555;">${fix.file}</td>
+                    <td style="padding:10px 14px;color:#444;max-width:340px;">${fix.explanation || '—'}</td>
+                    <td style="padding:10px 14px;text-align:center;">
+                        <span style="background:${color};color:#fff;padding:3px 12px;border-radius:12px;font-size:0.78rem;font-weight:600;">${icon}</span>
+                    </td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            content.innerHTML = html;
+        })
+        .catch(() => {});
+}
 
     const showMonthBtn = document.getElementById('showMonthBtn');
     const monthSection = document.getElementById('monthChartSection');

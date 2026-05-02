@@ -1142,6 +1142,83 @@ def gemini_fixes_view():
     return render_template('gemini_fixes.html')
 
 
+@app.route('/apply_fixes', methods=['POST'])
+def apply_fixes():
+    import json as _json
+    data = request.get_json()
+    if not data or 'fixes' not in data:
+        return jsonify({"error": "No fixes provided"}), 400
+
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    results = []
+    status_records = []
+
+    for fix in data['fixes']:
+        suggestion = fix.get('suggestion', '')
+        code_match = re.search(r'Fixed Code:\s*```[\w]*\n([\s\S]*?)```', suggestion, re.IGNORECASE)
+        expl_text = re.sub(r'Fixed Code:\s*```[\w]*\n[\s\S]*?```', '', suggestion, flags=re.IGNORECASE).strip()
+
+        if not code_match:
+            results.append({"stage": fix['stage'], "status": "skipped"})
+            status_records.append({
+                "stage": fix['stage'], "type": fix.get('type', ''),
+                "file": fix.get('file', ''), "status": "skipped",
+                "explanation": expl_text, "fixed_code": ""
+            })
+            continue
+
+        fixed_code = code_match.group(1)
+        file_path = os.path.join(BASE_DIR, fix['file'])
+        start_line = fix['lines'][0] - 1
+        end_line = fix['lines'][1]
+
+        try:
+            with open(file_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+
+            fixed_lines = [(ln if ln.endswith('\n') else ln + '\n') for ln in fixed_code.split('\n')]
+            new_lines = lines[:start_line] + fixed_lines + lines[end_line:]
+
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.writelines(new_lines)
+
+            results.append({"stage": fix['stage'], "status": "applied", "file": fix['file']})
+            status_records.append({
+                "stage": fix['stage'], "type": fix.get('type', ''),
+                "file": fix.get('file', ''), "status": "applied",
+                "explanation": expl_text, "fixed_code": fixed_code.strip()
+            })
+        except Exception as e:
+            results.append({"stage": fix['stage'], "status": "error", "error": str(e)})
+            status_records.append({
+                "stage": fix['stage'], "type": fix.get('type', ''),
+                "file": fix.get('file', ''), "status": "error",
+                "explanation": expl_text, "fixed_code": ""
+            })
+
+    # Save fix status for admin dashboard
+    status_path = os.path.join(BASE_DIR, 'fixes_status.json')
+    with open(status_path, 'w', encoding='utf-8') as f:
+        _json.dump({
+            "applied_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "fixes": status_records
+        }, f, indent=2)
+
+    applied = sum(1 for r in results if r['status'] == 'applied')
+    return jsonify({"results": results, "applied": applied})
+
+
+@app.route('/fixes_status', methods=['GET'])
+def fixes_status():
+    import json as _json
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    status_path = os.path.join(BASE_DIR, 'fixes_status.json')
+    if not os.path.exists(status_path):
+        return jsonify({"applied_at": None, "fixes": []})
+    with open(status_path, 'r', encoding='utf-8') as f:
+        return jsonify(_json.load(f))
+
+
 @app.route('/get_fixes', methods=['GET'])
 def get_fixes():
     from groq import Groq

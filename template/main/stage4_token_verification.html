@@ -17,11 +17,6 @@
                 </div>
                 <button type="submit" class="ctf-button">Verify Session</button>
             </form>
-            <button class="fix-btn" onclick="var p=document.getElementById('fix4');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'▲ Hide Fix':'▶ Fix It'">▶ Fix It</button>
-            <div class="fix-panel" id="fix4">
-                <h4>Recommended Fix — Insecure Deserialization</h4>
-                <p>Never deserialize untrusted data. Use signed, integrity-verified tokens (e.g., JWT with strong secrets) instead of raw serialized objects. Apply strict type allow-lists if deserialization is unavoidable, and run deserialization in a sandboxed context.</p>
-            </div>
             <p><a href="/stage3" class="back-link">Back to Stage 3</a></p>
         </div>
     </div>

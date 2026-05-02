@@ -220,7 +220,7 @@
     <div class="done-bar" id="doneBar">Analysis complete. All 5 vulnerability fixes retrieved successfully.</div>
 
     <div style="text-align:center; margin-top: 30px; margin-bottom: 40px;">
-        <button id="applyBtn" onclick="applyChanges()" style="
+        <button id="applyBtn" onclick="applyChanges()" disabled style="opacity:0.5;
             background: #276749;
             color: #fff;
             border: none;
@@ -309,7 +309,9 @@
                 if (data.error) throw new Error(data.error);
                 if (!data.fixes || !Array.isArray(data.fixes)) throw new Error('Unexpected response from server');
 
+                window._fixesData = data.fixes;
                 data.fixes.forEach(fix => fillStageBlock(fix));
+                document.getElementById('applyBtn').disabled = false;
 
                 statusBar.style.animation = 'none';
                 statusBar.style.background = '#f0fff4';
@@ -332,14 +334,29 @@
         async function applyChanges() {
             const btn = document.getElementById('applyBtn');
             const status = document.getElementById('applyStatus');
+
+            if (!window._fixesData) {
+                status.textContent = 'Please wait for fixes to finish loading.';
+                return;
+            }
+
             btn.disabled = true;
             btn.textContent = '⏳ Applying...';
-            status.textContent = 'Deploying patches...';
+            status.textContent = 'Writing fixes to files...';
+
             try {
-                await fetch('/open_terminal', { method: 'POST' });
-                btn.textContent = '✔ Changes Applied';
+                const res = await fetch('/apply_fixes', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ fixes: window._fixesData })
+                });
+                const data = await res.json();
+                if (data.error) throw new Error(data.error);
+
+                btn.textContent = '✔ Applied ' + data.applied + ' fix(es)';
                 btn.style.background = '#2b6cb0';
-                status.textContent = 'Patch deployment initiated. Check the terminal window.';
+                status.textContent = 'Files updated successfully! Reloading in 2 seconds...';
+                setTimeout(() => location.reload(), 2000);
             } catch (err) {
                 btn.disabled = false;
                 btn.textContent = '⚙ Apply Changes';

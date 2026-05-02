@@ -17,11 +17,6 @@
                 </div>
                 <button type="submit" class="ctf-button">Fetch Resource</button>
             </form>
-            <button class="fix-btn" onclick="var p=document.getElementById('fix5');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'▲ Hide Fix':'▶ Fix It'">▶ Fix It</button>
-            <div class="fix-panel" id="fix5">
-                <h4>Recommended Fix — SSRF (Server-Side Request Forgery)</h4>
-                <p>Implement a strict URL allow-list for any server-side fetch functionality. Block requests to private/internal IP ranges (127.x, 10.x, 172.16.x, 192.168.x) and cloud metadata endpoints. Isolate outbound network access and never expose raw fetch results to the user.</p>
-            </div>
             <p><a href="/stage4" class="back-link">Back to Stage 4</a></p>
         </div>
     </div>

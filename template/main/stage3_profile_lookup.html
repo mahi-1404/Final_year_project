@@ -17,11 +17,6 @@
                 </div>
                 <button type="submit" class="ctf-button">Submit XML</button>
             </form>
-            <button class="fix-btn" onclick="var p=document.getElementById('fix3');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'▲ Hide Fix':'▶ Fix It'">▶ Fix It</button>
-            <div class="fix-panel" id="fix3">
-                <h4>Recommended Fix — XXE (XML External Entity)</h4>
-                <p>Disable external entity and DTD processing in your XML parser (e.g., set <code>FEATURE_EXTERNAL_GENERAL_ENTITIES</code> to false). Use a safe XML library or JSON instead of XML where possible. Never parse untrusted XML with default parser settings.</p>
-            </div>
             <p><a href="/stage2" class="back-link">Back to Stage 2</a></p>
         </div>
     </div>

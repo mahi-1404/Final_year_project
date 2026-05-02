@@ -21,11 +21,6 @@
                 </div>
                 <button type="submit" class="ctf-button">Access Legacy System</button>
             </form>
-            <button class="fix-btn" onclick="var p=document.getElementById('fix2');p.style.display=p.style.display==='block'?'none':'block';this.textContent=p.style.display==='block'?'▲ Hide Fix':'▶ Fix It'">▶ Fix It</button>
-            <div class="fix-panel" id="fix2">
-                <h4>Recommended Fix — XSS / SSTI</h4>
-                <p>Use strict output encoding on all user-supplied data before rendering it in HTML. Implement a Content Security Policy (CSP). Never evaluate template expressions built from user input — use sandboxed or logic-less templates and whitelist-based input validation.</p>
-            </div>
             <p><a href="/stage1" class="back-link">Back to Stage 1</a></p>
         </div>
     </div>
