@@ -1,6 +1,8 @@
 from flask import Flask, request, redirect, render_template, render_template_string, jsonify
-from google import genai
+from dotenv import load_dotenv
 import logging
+
+load_dotenv()
 from logging.handlers import RotatingFileHandler
 import os
 import re
@@ -71,8 +73,6 @@ def rotate_log_monthly():
  # Removed automatic after_request logging to prevent auto log generation
 # ================================================================== #
 
-# Configure Gemini
-client = genai.Client(api_key="YOUR_GEMINI_API_KEY_HERE")
 
 @app.route('/')
 def home():
@@ -144,14 +144,16 @@ def check():
     classification_reason = "unknown"
 
     try:
-        # Try using Gemini API for classification
-        response = client.models.generate_content(
-            model="gemini-2.0-flash",
-            contents=f"Classify this input as 'red' (malicious) or 'green' (safe) if the entered data is not in the melicious data return green : {user_input}"
+        from groq import Groq
+        groq_client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
+        response = groq_client.chat.completions.create(
+            model="llama-3.3-70b-versatile",
+            messages=[{"role": "user", "content": f"Classify this input as 'red' (malicious) or 'green' (safe). If the input is not malicious return green: {user_input}"}],
+            max_tokens=10
         )
-        verdict = response.text.strip().lower()
+        verdict = response.choices[0].message.content.strip().lower()
         if "red" in verdict:
-            classification_reason = "gemini_red"
+            classification_reason = "groq_red"
             app.logger.info(
                 "PAYLOAD target=honeypot reason=%s ip=%s ua=\"%s\" body=\"%s\"",
                 classification_reason,
@@ -169,7 +171,7 @@ def check():
             )
             return redirect("/honeypot")
         else:
-            classification_reason = "gemini_green"
+            classification_reason = "groq_green"
             app.logger.info(
                 "REDIRECT target=safe verdict=green reason=%s method=%s path=%s ip=%s ua=\"%s\"",
                 classification_reason,
@@ -180,13 +182,9 @@ def check():
             )
             return redirect("/safe")
     except Exception as e:
-        # Fallback: Simple rule-based detection if API fails
-        app.logger.warning(f"Gemini API error: {e}. Using fallback detection.")
-        
-        # Check for common malicious patterns
-        malicious_patterns = ['<script>', 'DROP', 'SELECT', 'INSERT', 'DELETE', 'UPDATE', 
-                            'UNION', '--', ';--', 'OR 1=1', 'admin\'--', '../', 'passwd']
-        
+        app.logger.warning(f"Groq API error: {e}. Using fallback detection.")
+        malicious_patterns = ['<script>', 'DROP', 'SELECT', 'INSERT', 'DELETE', 'UPDATE',
+                              'UNION', '--', ';--', 'OR 1=1', 'admin\'--', '../', 'passwd']
         user_input_lower = user_input.lower()
         is_malicious = any(pattern.lower() in user_input_lower for pattern in malicious_patterns)
         classification_reason = "fallback_malicious" if is_malicious else "fallback_legit"
@@ -1223,7 +1221,7 @@ def fixes_status():
 def get_fixes():
     from groq import Groq
 
-    GROQ_API_KEY = "YOUR_GROQ_API_KEY_HERE"
+    GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
     def read_lines(filepath, start, end):
