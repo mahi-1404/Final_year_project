@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, render_template, render_template_string, jsonify
+from flask import Flask, request, redirect, render_template, render_template_string, jsonify, Response
 from dotenv import load_dotenv
 import logging
 
@@ -7,11 +7,16 @@ from logging.handlers import RotatingFileHandler
 import os
 import re
 import random
+import json as _json
+import queue
+import threading
+import uuid
 from collections import defaultdict
 from datetime import datetime, timedelta
 from Decision import count_hits # Import the count_hits function
 import sys
 from pathlib import Path
+
 
 # Add ml_detection to path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'ml_detection'))
@@ -676,6 +681,7 @@ def diagnose():
         request.user_agent.string
     )
     
+    # Validate URL format
     # SSRF vulnerability (intentionally vulnerable for CTF)
     # Check for internal network access or cloud metadata endpoints
     ssrf_patterns = [
@@ -1216,6 +1222,254 @@ def fixes_status():
         return jsonify(_json.load(f))
 
 
+# ── Live apply job tracking ──────────────────────────────────────────────── #
+_apply_jobs = {}  # job_id -> {"queue": Queue, "done": bool, "applied": int}
+
+
+def _run_apply_job(job_id, fixes_data):
+    """Background thread: runs Claude CLI per file, streams output to the job queue."""
+    job = _apply_jobs[job_id]
+    q = job['queue']
+    BASE_DIR_local = os.path.dirname(os.path.abspath(__file__))
+
+    def emit(text, kind="log"):
+        q.put({"type": kind, "text": text})
+
+    import tempfile, subprocess
+
+    fixes_by_file = defaultdict(list)
+    for fix in fixes_data:
+        if fix.get('file') and fix.get('corrected_file'):
+            fixes_by_file[fix['file']].append(fix)
+        else:
+            emit(f"[SKIP] Stage {fix.get('stage')} — no fix data", "warn")
+
+    total_applied = 0
+
+    for filepath, file_fixes in fixes_by_file.items():
+        full_path = os.path.join(BASE_DIR_local, filepath)
+        vuln_types = ", ".join(fx['type'] for fx in file_fixes)
+        emit(f"\n{'─'*60}", "sep")
+        emit(f"[FILE] {filepath}", "file")
+        emit(f"[FIXES] {vuln_types}", "info")
+
+        combined = ""
+        for fx in file_fixes:
+            combined += (
+                f"=== Stage {fx['stage']} — {fx['type']} ===\n"
+                f"Vulnerability: {fx.get('explanation', '')}\n"
+                f"Groq's fix (around lines {fx.get('lines', [0,0])}):\n"
+                f"{fx['corrected_file']}\n\n"
+            )
+
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.txt', prefix='groq_fixes_')
+        try:
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as tf:
+                tf.write(combined)
+        except Exception:
+            os.close(tmp_fd)
+
+        prompt = (
+            f"Read the original file at: {full_path}\n"
+            f"Read Groq's suggested fix snippets from: {tmp_path}\n\n"
+            f"Groq identified these vulnerabilities in the file: {vuln_types}\n\n"
+            f"Your job:\n"
+            f"1. For each fix snippet in {tmp_path}, locate that vulnerable section in {full_path}.\n"
+            f"2. Check if each Groq snippet correctly resolves its vulnerability.\n"
+            f"3. Apply all fixes to {full_path} — one at a time, carefully.\n"
+            f"4. If any snippet introduces inconsistencies (broken imports, wrong variable names, "
+            f"mismatched signatures, syntax errors, logic that no longer wires up), "
+            f"fix those too — but touch nothing else.\n"
+            f"5. If a snippet is wrong or incomplete, apply the minimal correct fix yourself.\n\n"
+            f"Rules — strictly enforced:\n"
+            f"- Only change what is needed to fix the vulnerabilities and any inconsistency they cause.\n"
+            f"- Do NOT refactor, rename, reformat, or touch any unrelated code.\n"
+            f"- Preserve all routes, functions, logic, and structure exactly as they are.\n"
+            f"- After all edits, verify the file is self-consistent from top to bottom.\n"
+            f"- Do not explain. Just read, verify, and apply."
+        )
+
+        emit(f"[CLAUDE] Starting — sending prompt for {filepath}...", "info")
+
+        try:
+            proc = subprocess.Popen(
+                ['claude', '-p', prompt, '--allowedTools', 'Read,Edit,Write',
+                 '--dangerously-skip-permissions', '--output-format', 'text'],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                cwd=BASE_DIR_local
+            )
+
+            for line in proc.stdout:
+                line = line.rstrip()
+                if line:
+                    emit(line, "claude")
+
+            proc.wait(timeout=300)
+
+            if proc.returncode == 0:
+                total_applied += len(file_fixes)
+                for fx in file_fixes:
+                    emit(f"[DONE] Stage {fx['stage']} ({fx['type']}) applied to {filepath}", "success")
+            else:
+                emit(f"[ERROR] Claude exited with code {proc.returncode} for {filepath}", "error")
+
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            emit(f"[ERROR] Claude CLI timed out for {filepath}", "error")
+        except FileNotFoundError:
+            emit("[ERROR] 'claude' command not found — is Claude Code CLI installed and on PATH?", "error")
+            break
+        except Exception as e:
+            emit(f"[ERROR] {e}", "error")
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    emit(f"\n{'─'*60}", "sep")
+    emit(f"[COMPLETE] {total_applied} fix(es) applied across {len(fixes_by_file)} file(s).", "success")
+    q.put({"type": "done", "applied": total_applied})
+    job['done'] = True
+    job['applied'] = total_applied
+
+
+@app.route('/start_apply', methods=['POST'])
+def start_apply():
+    data = request.get_json()
+    if not data or 'fixes' not in data:
+        return jsonify({"error": "No fixes provided"}), 400
+    job_id = uuid.uuid4().hex[:10]
+    q = queue.Queue()
+    _apply_jobs[job_id] = {"queue": q, "done": False, "applied": 0}
+    t = threading.Thread(target=_run_apply_job, args=(job_id, data['fixes']), daemon=True)
+    t.start()
+    return jsonify({"job_id": job_id})
+
+
+@app.route('/apply_stream/<job_id>')
+def apply_stream(job_id):
+    if job_id not in _apply_jobs:
+        return jsonify({"error": "Job not found"}), 404
+
+    def generate():
+        job = _apply_jobs[job_id]
+        q = job['queue']
+        yield f"data: {_json.dumps({'type': 'connected'})}\n\n"
+        while True:
+            try:
+                msg = q.get(timeout=2)
+                yield f"data: {_json.dumps(msg)}\n\n"
+                if msg.get('type') == 'done':
+                    break
+            except queue.Empty:
+                if job['done']:
+                    break
+                yield f"data: {_json.dumps({'type': 'heartbeat'})}\n\n"
+
+    return Response(
+        generate(),
+        mimetype='text/event-stream',
+        headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'}
+    )
+
+
+@app.route('/apply_window/<job_id>')
+def apply_window(job_id):
+    return render_template_string("""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Claude — Applying Fixes</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0d1117; color: #c9d1d9; font-family: 'Courier New', monospace;
+         font-size: 13px; display: flex; flex-direction: column; height: 100vh; }
+  .titlebar { background: #161b22; border-bottom: 1px solid #30363d;
+              padding: 10px 16px; display: flex; align-items: center; gap: 10px; }
+  .titlebar h1 { font-size: 13px; font-weight: 600; color: #e6edf3; }
+  .badge { background: #238636; color: #fff; font-size: 11px;
+           padding: 2px 8px; border-radius: 12px; }
+  .badge.working { background: #9e6a03; animation: pulse 1.2s infinite; }
+  .badge.done { background: #238636; }
+  .badge.error { background: #b62324; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
+  #terminal { flex: 1; overflow-y: auto; padding: 14px 16px; line-height: 1.7; }
+  .log   { color: #8b949e; }
+  .info  { color: #58a6ff; }
+  .file  { color: #d2a8ff; font-weight: 600; }
+  .claude{ color: #c9d1d9; }
+  .success{ color: #3fb950; font-weight: 600; }
+  .error { color: #f85149; font-weight: 600; }
+  .warn  { color: #e3b341; }
+  .sep   { color: #30363d; }
+  .cursor { display: inline-block; width: 8px; height: 14px;
+            background: #58a6ff; animation: blink .8s infinite; vertical-align: middle; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+  .statusbar { background: #161b22; border-top: 1px solid #30363d;
+               padding: 8px 16px; font-size: 12px; color: #8b949e; }
+</style>
+</head>
+<body>
+<div class="titlebar">
+  <h1>Claude Code — Live Fix Output</h1>
+  <span class="badge working" id="badge">Working...</span>
+</div>
+<div id="terminal"><span class="cursor"></span></div>
+<div class="statusbar" id="statusbar">Connecting to Claude...</div>
+
+<script>
+  const terminal = document.getElementById('terminal');
+  const badge = document.getElementById('badge');
+  const statusbar = document.getElementById('statusbar');
+  const jobId = {{ job_id | tojson }};
+
+  function appendLine(text, cls) {
+    const cursor = terminal.querySelector('.cursor');
+    const div = document.createElement('div');
+    div.className = cls || 'log';
+    div.textContent = text;
+    terminal.insertBefore(div, cursor);
+    terminal.scrollTop = terminal.scrollHeight;
+  }
+
+  const es = new EventSource(`/apply_stream/${jobId}`);
+
+  es.onmessage = function(e) {
+    const msg = JSON.parse(e.data);
+    if (msg.type === 'connected') {
+      appendLine('[CONNECTED] Waiting for Claude to start...', 'info');
+      statusbar.textContent = 'Claude CLI connected — running...';
+    } else if (msg.type === 'heartbeat') {
+      // silent keep-alive
+    } else if (msg.type === 'done') {
+      es.close();
+      badge.textContent = 'Done';
+      badge.className = 'badge done';
+      statusbar.textContent = `Finished — ${msg.applied} fix(es) applied. You can close this window.`;
+      terminal.querySelector('.cursor').remove();
+    } else if (msg.type === 'error') {
+      appendLine(msg.text, 'error');
+      badge.textContent = 'Error';
+      badge.className = 'badge error';
+    } else {
+      appendLine(msg.text, msg.type || 'log');
+    }
+  };
+
+  es.onerror = function() {
+    es.close();
+    appendLine('[CONNECTION LOST] Stream ended.', 'error');
+    badge.textContent = 'Disconnected';
+    badge.className = 'badge error';
+  };
+</script>
+</body>
+</html>""", job_id=job_id)
+
+
 @app.route('/verify_and_apply_fixes', methods=['POST'])
 def verify_and_apply_fixes():
     """
@@ -1498,4 +1752,6 @@ def admin_data():
 
 
 if __name__ == "__main__":
-    app.run(debug=True, port="5001")
+    # use_reloader=False prevents Flask from restarting when Claude edits app.py,
+    # which would kill any active SSE streams mid-fix
+    app.run(debug=True, port="5001", use_reloader=False)

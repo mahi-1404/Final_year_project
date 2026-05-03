@@ -354,41 +354,52 @@
             const btn = document.getElementById('applyBtn');
             const status = document.getElementById('applyStatus');
 
-            if (!window._fixesData) {
+            if (!window._fixesData || window._fixesData.length === 0) {
                 status.textContent = 'Please wait for fixes to finish loading.';
                 return;
             }
 
             btn.disabled = true;
-            btn.textContent = '⏳ Sending to Claude for verification...';
-            status.textContent = 'Claude CLI is reviewing the Groq fixes and applying corrections — this may take up to 3 minutes...';
+            btn.textContent = '⏳ Starting Claude...';
+
+            // Open the window immediately on the user gesture — before any async work
+            // so Chrome does not treat it as a blocked popup
+            const win = window.open('', 'claude_apply', 'width=900,height=650,resizable=yes,scrollbars=yes');
+            if (win) {
+                win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+                    <title>Claude — Starting...</title>
+                    <style>body{background:#0d1117;color:#58a6ff;font-family:'Courier New',monospace;
+                    padding:30px;font-size:14px}</style></head><body>
+                    <p>Connecting to Flask and starting Claude CLI job...</p>
+                    <p style="color:#8b949e;margin-top:10px">Window will update automatically.</p>
+                    </body></html>`);
+            }
 
             try {
-                const controller = new AbortController();
-                const timeout = setTimeout(() => controller.abort(), 240000);
-                const res = await fetch('/verify_and_apply_fixes', {
+                const res = await fetch('/start_apply', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fixes: window._fixesData }),
-                    signal: controller.signal
+                    body: JSON.stringify({ fixes: window._fixesData })
                 });
-                clearTimeout(timeout);
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                btn.textContent = '✔ Claude applied ' + data.applied + ' fix(es)';
-                btn.style.background = '#2b6cb0';
-                const errors = (data.results || []).filter(r => r.status === 'error');
-                if (errors.length) {
-                    status.textContent = `${data.applied} fix(es) applied. ${errors.length} error(s): ` +
-                        errors.map(e => e.error).join('; ');
+                const jobId = data.job_id;
+
+                if (win && !win.closed) {
+                    win.location.href = `/apply_window/${jobId}`;
                 } else {
-                    status.textContent = 'All fixes verified by Claude and applied successfully! Reloading in 2 seconds...';
-                    setTimeout(() => location.reload(), 2000);
+                    status.textContent = `Popup blocked — open manually: /apply_window/${jobId}`;
                 }
-            } catch (err) {
+
+                btn.textContent = '⚙ Verify & Apply via Claude';
                 btn.disabled = false;
-                btn.textContent = '⚙ Apply Changes';
+                status.textContent = `Claude is running — watch the output window (job: ${jobId}).`;
+
+            } catch (err) {
+                if (win && !win.closed) win.close();
+                btn.disabled = false;
+                btn.textContent = '⚙ Verify & Apply via Claude';
                 status.textContent = 'Error: ' + err.message;
             }
         }
