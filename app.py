@@ -7,7 +7,6 @@ from logging.handlers import RotatingFileHandler
 import os
 import re
 import random
-import time
 from collections import defaultdict
 from datetime import datetime, timedelta
 from Decision import count_hits # Import the count_hits function
@@ -1150,51 +1149,51 @@ def apply_fixes():
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
     results = []
     status_records = []
+    files_written = {}
 
     for fix in data['fixes']:
-        suggestion = fix.get('suggestion', '')
-        code_match = re.search(r'Fixed Code:\s*```[\w]*\n([\s\S]*?)```', suggestion, re.IGNORECASE)
-        expl_text = re.sub(r'Fixed Code:\s*```[\w]*\n[\s\S]*?```', '', suggestion, flags=re.IGNORECASE).strip()
+        corrected_file = fix.get('corrected_file', '')
+        explanation = fix.get('explanation', '')
+        filepath = fix.get('file', '')
 
-        if not code_match:
+        if not corrected_file or not filepath:
             results.append({"stage": fix['stage'], "status": "skipped"})
             status_records.append({
                 "stage": fix['stage'], "type": fix.get('type', ''),
-                "file": fix.get('file', ''), "status": "skipped",
-                "explanation": expl_text, "fixed_code": ""
+                "file": filepath, "status": "skipped",
+                "explanation": explanation, "fixed_code": ""
             })
             continue
 
-        fixed_code = code_match.group(1)
-        file_path = os.path.join(BASE_DIR, fix['file'])
-        start_line = fix['lines'][0] - 1
-        end_line = fix['lines'][1]
-
-        try:
-            with open(file_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-
-            fixed_lines = [(ln if ln.endswith('\n') else ln + '\n') for ln in fixed_code.split('\n')]
-            new_lines = lines[:start_line] + fixed_lines + lines[end_line:]
-
-            with open(file_path, 'w', encoding='utf-8') as f:
-                f.writelines(new_lines)
-
-            results.append({"stage": fix['stage'], "status": "applied", "file": fix['file']})
+        if filepath in files_written:
+            results.append({"stage": fix['stage'], "status": "applied", "file": filepath})
             status_records.append({
                 "stage": fix['stage'], "type": fix.get('type', ''),
-                "file": fix.get('file', ''), "status": "applied",
-                "explanation": expl_text, "fixed_code": fixed_code.strip()
+                "file": filepath, "status": "applied",
+                "explanation": explanation, "fixed_code": ""
+            })
+            continue
+
+        try:
+            file_path = os.path.join(BASE_DIR, filepath)
+            with open(file_path, 'w', encoding='utf-8') as f:
+                f.write(corrected_file)
+            files_written[filepath] = True
+
+            results.append({"stage": fix['stage'], "status": "applied", "file": filepath})
+            status_records.append({
+                "stage": fix['stage'], "type": fix.get('type', ''),
+                "file": filepath, "status": "applied",
+                "explanation": explanation, "fixed_code": ""
             })
         except Exception as e:
             results.append({"stage": fix['stage'], "status": "error", "error": str(e)})
             status_records.append({
                 "stage": fix['stage'], "type": fix.get('type', ''),
-                "file": fix.get('file', ''), "status": "error",
-                "explanation": expl_text, "fixed_code": ""
+                "file": filepath, "status": "error",
+                "explanation": explanation, "fixed_code": ""
             })
 
-    # Save fix status for admin dashboard
     status_path = os.path.join(BASE_DIR, 'fixes_status.json')
     with open(status_path, 'w', encoding='utf-8') as f:
         _json.dump({
@@ -1217,113 +1216,239 @@ def fixes_status():
         return jsonify(_json.load(f))
 
 
-@app.route('/get_fixes', methods=['GET'])
-def get_fixes():
-    from groq import Groq
+@app.route('/verify_and_apply_fixes', methods=['POST'])
+def verify_and_apply_fixes():
+    """
+    Passes Groq's fix suggestions to the Claude CLI for verification and application.
+    Claude reads the original file, checks Groq's proposed fix for correctness and
+    consistency, then writes the properly corrected file to disk.
+    """
+    import subprocess
+    import json as _json
 
-    GROQ_API_KEY = os.environ.get("GROQ_API_KEY")
+    data = request.get_json()
+    if not data or 'fixes' not in data:
+        return jsonify({"error": "No fixes provided"}), 400
+
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    results = []
+    status_records = []
 
-    def read_lines(filepath, start, end):
+    # Group fixes by file so all snippets for the same file go to Claude in one pass
+    from collections import defaultdict
+    fixes_by_file = defaultdict(list)
+    for fix in data['fixes']:
+        if fix.get('file') and fix.get('corrected_file'):
+            fixes_by_file[fix['file']].append(fix)
+        else:
+            results.append({"stage": fix.get('stage'), "status": "skipped", "reason": "no corrected file"})
+            status_records.append({
+                "stage": fix.get('stage'), "type": fix.get('type', ''),
+                "file": fix.get('file', ''), "status": "skipped",
+                "explanation": fix.get('explanation', ''), "fixed_code": ""
+            })
+
+    import tempfile
+
+    for filepath, file_fixes in fixes_by_file.items():
         full_path = os.path.join(BASE_DIR, filepath)
-        with open(full_path, 'r', encoding='utf-8') as f:
-            lines = f.readlines()
-        return ''.join(lines[start - 1:end])
 
-    vulnerable_snippets = [
-        {
-            "stage": 1,
-            "type": "Reconnaissance",
-            "file": "template/main/stage1_recon.html",
-            "lines": (1, 27),
-            "code": read_lines("template/main/stage1_recon.html", 1, 27),
-        },
-        {
-            "stage": 2,
-            "type": "XSS / SSTI",
-            "file": "app.py",
-            "lines": (263, 402),
-            "code": read_lines("app.py", 263, 402),
-        },
-        {
-            "stage": 3,
-            "type": "XXE (XML External Entity)",
-            "file": "app.py",
-            "lines": (404, 431),
-            "code": read_lines("app.py", 404, 431),
-        },
-        {
-            "stage": 4,
-            "type": "Insecure Deserialization",
-            "file": "app.py",
-            "lines": (527, 561),
-            "code": read_lines("app.py", 527, 561),
-        },
-        {
-            "stage": 5,
-            "type": "SSRF (Server-Side Request Forgery)",
-            "file": "app.py",
-            "lines": (667, 703),
-            "code": read_lines("app.py", 667, 703),
-        },
-    ]
+        # Build a single temp file listing all Groq snippets for this file
+        combined = ""
+        for fx in file_fixes:
+            combined += (
+                f"=== Stage {fx['stage']} — {fx['type']} ===\n"
+                f"Vulnerability: {fx.get('explanation', '')}\n"
+                f"Groq's fix (lines {fx.get('lines', [0,0])}):\n"
+                f"{fx['corrected_file']}\n\n"
+            )
 
-    # Build one combined prompt for all 5 stages — single API call
-    combined_prompt = (
-        "You are a cybersecurity expert reviewing a Flask CTF web application.\n"
-        "Below are 5 vulnerable code sections. For each one provide:\n"
-        "1. A brief explanation of why the code is vulnerable (1-2 lines)\n"
-        "2. The corrected/fixed version of ONLY the vulnerable lines (as a code block)\n\n"
-        "Return your answer in this EXACT format (no extra text outside this structure):\n\n"
-        "STAGE_1:\n"
-        "<brief explanation>\n\n"
-        "Fixed Code:\n"
-        "```python\n<fixed code>\n```\n\n"
-        "STAGE_2:\n... and so on up to STAGE_5\n\n"
-    )
-    for vuln in vulnerable_snippets:
-        combined_prompt += (
-            f"--- STAGE {vuln['stage']}: {vuln['type']} ---\n"
-            f"File: {vuln['file']} (lines {vuln['lines'][0]}–{vuln['lines'][1]})\n"
-            f"```\n{vuln['code']}\n```\n\n"
+        tmp_fd, tmp_path = tempfile.mkstemp(suffix='.txt', prefix='groq_fixes_')
+        try:
+            with os.fdopen(tmp_fd, 'w', encoding='utf-8') as tf:
+                tf.write(combined)
+        except Exception:
+            os.close(tmp_fd)
+
+        vuln_types = ", ".join(fx['type'] for fx in file_fixes)
+
+        prompt = (
+            f"Read the original file at: {full_path}\n"
+            f"Read Groq's suggested fix snippets from: {tmp_path}\n\n"
+            f"Groq identified these vulnerabilities in the file: {vuln_types}\n\n"
+            f"Your job:\n"
+            f"1. For each fix snippet in {tmp_path}, locate that vulnerable section in {full_path}.\n"
+            f"2. Check if each Groq snippet correctly resolves its vulnerability.\n"
+            f"3. Apply all fixes to {full_path} — one at a time, carefully.\n"
+            f"4. If any snippet introduces inconsistencies (broken imports, wrong variable names, "
+            f"mismatched signatures, syntax errors, logic that no longer wires up), "
+            f"fix those too — but touch nothing else.\n"
+            f"5. If a snippet is wrong or incomplete, apply the minimal correct fix yourself.\n\n"
+            f"Rules — strictly enforced:\n"
+            f"- Only change what is needed to fix the vulnerabilities and any inconsistency they cause.\n"
+            f"- Do NOT refactor, rename, reformat, or touch any unrelated code.\n"
+            f"- Preserve all routes, functions, logic, and structure exactly as they are.\n"
+            f"- After all edits, verify the file is self-consistent from top to bottom.\n"
+            f"- Do not explain. Just read, verify, and apply."
         )
 
-    client = Groq(api_key=GROQ_API_KEY)
+        try:
+            proc = subprocess.run(
+                ['claude', '-p', prompt, '--allowedTools', 'Read,Edit,Write',
+                 '--dangerously-skip-permissions', '--output-format', 'text'],
+                capture_output=True,
+                text=True,
+                timeout=300,
+                cwd=BASE_DIR
+            )
+            ok = proc.returncode == 0
+            err_msg = "" if ok else (proc.stderr.strip() or proc.stdout.strip())[:300]
+
+            for fx in file_fixes:
+                results.append({
+                    "stage": fx['stage'],
+                    "status": "applied" if ok else "error",
+                    "file": filepath,
+                    **({"error": err_msg} if not ok else {})
+                })
+                status_records.append({
+                    "stage": fx['stage'], "type": fx.get('type', ''),
+                    "file": filepath,
+                    "status": "applied" if ok else "error",
+                    "explanation": fx.get('explanation', ''),
+                    "fixed_code": proc.stdout[:300] if ok else ""
+                })
+        except subprocess.TimeoutExpired:
+            for fx in file_fixes:
+                results.append({"stage": fx['stage'], "status": "error", "error": "Claude CLI timed out"})
+                status_records.append({
+                    "stage": fx['stage'], "type": fx.get('type', ''), "file": filepath,
+                    "status": "error", "explanation": "Claude CLI timed out", "fixed_code": ""
+                })
+        except FileNotFoundError:
+            return jsonify({"error": "Claude CLI not found. Make sure 'claude' is installed and on PATH."}), 500
+        except Exception as e:
+            for fx in file_fixes:
+                results.append({"stage": fx['stage'], "status": "error", "error": str(e)})
+                status_records.append({
+                    "stage": fx['stage'], "type": fx.get('type', ''), "file": filepath,
+                    "status": "error", "explanation": str(e), "fixed_code": ""
+                })
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except Exception:
+                pass
+
+    # Persist status for admin dashboard
+    status_path = os.path.join(BASE_DIR, 'fixes_status.json')
+    with open(status_path, 'w', encoding='utf-8') as f:
+        _json.dump({
+            "applied_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "fixes": status_records
+        }, f, indent=2)
+
+    applied = sum(1 for r in results if r['status'] == 'applied')
+    return jsonify({"results": results, "applied": applied})
+
+
+_VULNERABLE_STAGES = [
+    {"stage": 1, "type": "Reconnaissance",            "file": "template/main/stage1_recon.html", "route": None},
+    {"stage": 2, "type": "XSS / SSTI",                "file": "app.py", "route": "/legacy_login"},
+    {"stage": 3, "type": "XXE (XML External Entity)", "file": "app.py", "route": "/profile"},
+    {"stage": 4, "type": "Insecure Deserialization",  "file": "app.py", "route": "/verify_token"},
+    {"stage": 5, "type": "SSRF",                      "file": "app.py", "route": "/diagnose"},
+]
+
+
+def _extract_route_snippet(content, route_path):
+    lines = content.splitlines()
+    start = None
+    for i, line in enumerate(lines):
+        stripped = line.strip()
+        if (f"'{route_path}'" in stripped or f'"{route_path}"' in stripped) \
+                and stripped.startswith('@app.route'):
+            start = i
+            break
+    if start is None:
+        return content, 1, len(lines)
+    end = len(lines)
+    past_def = False
+    for i in range(start + 1, len(lines)):
+        line = lines[i]
+        if not past_def:
+            if line.startswith('def ') or line.startswith('async def '):
+                past_def = True
+            continue
+        if line and not line[0].isspace():
+            end = i
+            break
+    return '\n'.join(lines[start:end]), start + 1, end
+
+
+@app.route('/get_fix/<int:stage>', methods=['GET'])
+def get_fix_stage(stage):
+    """Fetch the Groq fix for a single stage. Called per-stage from the frontend."""
+    from groq import Groq
+
+    vuln = next((v for v in _VULNERABLE_STAGES if v['stage'] == stage), None)
+    if not vuln:
+        return jsonify({"error": f"Unknown stage {stage}"}), 404
+
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+    full_path = os.path.join(BASE_DIR, vuln['file'])
 
     try:
+        with open(full_path, 'r', encoding='utf-8') as f:
+            file_content = f.read()
+    except Exception as e:
+        return jsonify({"error": f"Cannot read {vuln['file']}: {e}"}), 500
+
+    if vuln['route']:
+        snippet, line_start, line_end = _extract_route_snippet(file_content, vuln['route'])
+    else:
+        snippet = file_content
+        line_start, line_end = 1, len(file_content.splitlines())
+
+    prompt = (
+        f"You are a cybersecurity expert. This code has a {vuln['type']} vulnerability.\n"
+        f"File: {vuln['file']}\n\n"
+        f"Vulnerable code:\n```\n{snippet}\n```\n\n"
+        f"Respond in this EXACT format — nothing else:\n"
+        f"EXPLANATION: <one sentence: what is vulnerable and how to fix it>\n"
+        f"FIXED_CODE:\n```\n<corrected version of the snippet above only>\n```"
+    )
+
+    try:
+        client = Groq(api_key=os.environ.get("GROQ_API_KEY"))
         response = client.chat.completions.create(
             model="llama-3.3-70b-versatile",
-            max_tokens=2048,
-            messages=[{"role": "user", "content": combined_prompt}]
+            max_tokens=3000,
+            messages=[{"role": "user", "content": prompt}]
         )
         raw = response.choices[0].message.content.strip()
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    # Parse the response — flexible regex handles markdown bold, spaces, etc.
-    import re
-    suggestions = {}
-    parts = re.split(r'\*{0,2}STAGE[_ ](\d)\*{0,2}\s*:', raw)
-    for i in range(1, len(parts), 2):
-        stage_num = int(parts[i])
-        suggestions[stage_num] = parts[i + 1].strip()
+    exp_match = re.search(r'EXPLANATION:\s*(.+)', raw)
+    code_match = re.search(r'FIXED_CODE:\s*```[^\n]*\n([\s\S]*?)```', raw)
 
-    # Fallback: if parsing failed, assign the full raw text to stage 1
-    if not suggestions:
-        suggestions = {i: raw for i in range(1, 6)}
+    return jsonify({
+        "stage": vuln["stage"],
+        "type": vuln["type"],
+        "file": vuln["file"],
+        "lines": [line_start, line_end],
+        "code": snippet,
+        "explanation": exp_match.group(1).strip() if exp_match else "See fix below.",
+        "suggestion": raw,
+        "corrected_file": code_match.group(1).strip() if code_match else snippet
+    })
 
-    results = []
-    for vuln in vulnerable_snippets:
-        results.append({
-            "stage": vuln["stage"],
-            "type": vuln["type"],
-            "file": vuln["file"],
-            "lines": list(vuln["lines"]),
-            "code": vuln["code"],
-            "suggestion": suggestions.get(vuln["stage"], "No suggestion returned.")
-        })
 
-    return jsonify({"fixes": results})
+@app.route('/get_fixes', methods=['GET'])
+def get_fixes():
+    """Legacy route kept for compatibility — redirects to per-stage calls."""
+    return jsonify({"error": "Use /get_fix/<stage> instead"}), 410
 
 
 @app.route('/open_terminal', methods=['POST'])

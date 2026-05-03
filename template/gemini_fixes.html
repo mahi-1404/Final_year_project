@@ -233,7 +233,7 @@
             letter-spacing: 0.04em;
             transition: background 0.2s;
         " onmouseover="this.style.background='#1f5438'" onmouseout="this.style.background='#276749'">
-            ⚙ Apply Changes
+            ⚙ Verify & Apply via Claude
         </button>
         <div id="applyStatus" style="margin-top: 12px; font-size: 0.85rem; color: #718096;"></div>
     </div>
@@ -281,8 +281,8 @@
             const fixEl = document.getElementById(`fix-${fix.stage}`);
             fixEl.className = 'fix-block';
 
-            const codeMatch = fix.suggestion.match(/Fixed Code:\s*```[\w]*\n([\s\S]*?)```/i);
-            const explanationText = fix.suggestion.replace(/Fixed Code:\s*```[\w]*\n[\s\S]*?```/i, '').trim();
+            const codeMatch = fix.suggestion.match(/FIXED_CODE:\s*```[^\n]*\n([\s\S]*?)```/i);
+            const explanationText = fix.explanation || fix.suggestion.replace(/FIXED_CODE:\s*```[^\n]*\n[\s\S]*?```/i, '').trim();
 
             let html = `<div class="explanation">${escapeHtml(explanationText)}</div>`;
             if (codeMatch) {
@@ -300,32 +300,51 @@
                 container.appendChild(createSkeletonBlock(i));
             }
 
-            statusBar.textContent = 'Sending source code to AI model for analysis...';
+            window._fixesData = [];
+            let allOk = true;
 
-            try {
-                const res = await fetch('/get_fixes');
-                const data = await res.json();
+            for (let stage = 1; stage <= 5; stage++) {
+                statusBar.textContent = `Analysing Stage ${stage} of 5 with Groq...`;
+                try {
+                    const controller = new AbortController();
+                    const timeout = setTimeout(() => controller.abort(), 90000);
+                    const res = await fetch(`/get_fix/${stage}`, { signal: controller.signal });
+                    clearTimeout(timeout);
+                    if (!res.ok) {
+                        const text = await res.text();
+                        throw new Error(`Server error ${res.status}: ${text.slice(0, 200)}`);
+                    }
+                    const fix = await res.json();
+                    if (fix.error) throw new Error(fix.error);
+                    window._fixesData.push(fix);
+                    fillStageBlock(fix);
+                } catch (err) {
+                    allOk = false;
+                    const block = document.getElementById(`stage-block-${stage}`);
+                    if (block) {
+                        block.querySelector('.stage-title').textContent = 'Error';
+                        block.querySelector('.stage-title').style.color = '#fc8181';
+                        document.getElementById(`fix-${stage}`).className = 'fix-block';
+                        document.getElementById(`fix-${stage}`).textContent = 'Error: ' + err.message;
+                    }
+                }
+            }
 
-                if (data.error) throw new Error(data.error);
-                if (!data.fixes || !Array.isArray(data.fixes)) throw new Error('Unexpected response from server');
-
-                window._fixesData = data.fixes;
-                data.fixes.forEach(fix => fillStageBlock(fix));
+            statusBar.style.animation = 'none';
+            if (window._fixesData.length > 0) {
                 document.getElementById('applyBtn').disabled = false;
-
-                statusBar.style.animation = 'none';
                 statusBar.style.background = '#f0fff4';
                 statusBar.style.borderColor = '#c6f6d5';
                 statusBar.style.color = '#276749';
-                statusBar.textContent = 'Analysis complete. All fixes retrieved from AI model.';
+                statusBar.textContent = allOk
+                    ? 'Analysis complete. All 5 fixes retrieved.'
+                    : `Partial success — ${window._fixesData.length} of 5 fixes retrieved.`;
                 document.getElementById('doneBar').style.display = 'block';
-
-            } catch (err) {
+            } else {
                 statusBar.style.background = '#fff5f5';
                 statusBar.style.borderColor = '#fed7d7';
                 statusBar.style.color = '#c53030';
-                statusBar.style.animation = 'none';
-                statusBar.textContent = 'Error: ' + err.message;
+                statusBar.textContent = 'All stages failed. Check that Flask is running and Groq API key is set.';
             }
         }
 
@@ -341,22 +360,32 @@
             }
 
             btn.disabled = true;
-            btn.textContent = '⏳ Applying...';
-            status.textContent = 'Writing fixes to files...';
+            btn.textContent = '⏳ Sending to Claude for verification...';
+            status.textContent = 'Claude CLI is reviewing the Groq fixes and applying corrections — this may take up to 3 minutes...';
 
             try {
-                const res = await fetch('/apply_fixes', {
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 240000);
+                const res = await fetch('/verify_and_apply_fixes', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ fixes: window._fixesData })
+                    body: JSON.stringify({ fixes: window._fixesData }),
+                    signal: controller.signal
                 });
+                clearTimeout(timeout);
                 const data = await res.json();
                 if (data.error) throw new Error(data.error);
 
-                btn.textContent = '✔ Applied ' + data.applied + ' fix(es)';
+                btn.textContent = '✔ Claude applied ' + data.applied + ' fix(es)';
                 btn.style.background = '#2b6cb0';
-                status.textContent = 'Files updated successfully! Reloading in 2 seconds...';
-                setTimeout(() => location.reload(), 2000);
+                const errors = (data.results || []).filter(r => r.status === 'error');
+                if (errors.length) {
+                    status.textContent = `${data.applied} fix(es) applied. ${errors.length} error(s): ` +
+                        errors.map(e => e.error).join('; ');
+                } else {
+                    status.textContent = 'All fixes verified by Claude and applied successfully! Reloading in 2 seconds...';
+                    setTimeout(() => location.reload(), 2000);
+                }
             } catch (err) {
                 btn.disabled = false;
                 btn.textContent = '⚙ Apply Changes';

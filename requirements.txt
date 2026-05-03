@@ -1,5 +1,6 @@
 flask>=3.0.0
 groq
+anthropic
 numpy
 pandas
 scikit-learn
