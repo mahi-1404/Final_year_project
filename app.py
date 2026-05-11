@@ -6,6 +6,7 @@ load_dotenv()
 from logging.handlers import RotatingFileHandler
 import os
 import re
+import html
 import random
 import json as _json
 import queue
@@ -269,14 +270,13 @@ def legacy_login():
     
     # Log the form data with path and full payload
     app.logger.info(
-        "STAGE2_INPUT path=%s ip=%s method=%s username=\"%s\" legacy_key=\"%s\" payload=\"username=%s&legacy_key=%s\" ua=\"%s\"",
+        "STAGE2_INPUT path=%s ip=%s method=%s username=%s legacy_key=%s payload='%s' ua=%s",
         request.path,
         request.remote_addr,
         request.method,
-        username.replace('"', "'"),
-        legacy_key.replace('"', "'"),
-        username.replace('"', "'"),
-        legacy_key.replace('"', "'"),
+        username,
+        legacy_key,
+        request.get_data(as_text=True),
         request.user_agent.string
     )
     
@@ -291,13 +291,12 @@ def legacy_login():
     if has_xss or has_ssti:
         attack_method = 'XSS' if has_xss else 'SSTI'
         app.logger.info(
-            "STAGE2_COMPROMISE path=%s ip=%s method=%s attack_type=%s payload=\"username=%s&legacy_key=%s\" status=SUCCESS",
+            "STAGE2_COMPROMISE path=%s ip=%s method=%s attack_type=%s payload=\"%s\" status=SUCCESS",
             request.path,
             request.remote_addr,
             attack_method,
             'Cross_Site_Scripting' if has_xss else 'Server_Side_Template_Injection',
-            username.replace('"', "'"),
-            legacy_key.replace('"', "'")
+            request.get_data(as_text=True)
         )
         return redirect('/stage3')
     else:
@@ -779,7 +778,7 @@ def diagnose():
             target_url.replace('"', "'")
         )
         # Simulate external URL fetch
-        return f"<h2>Diagnostic Result</h2><pre>Fetching from {target_url}...\n200 OK\nContent-Length: 1234\nServer: nginx</pre><p><a href='/stage5'>Try again</a></p>"
+        return f"<h2>Diagnostic Result</h2><pre>Fetching from {html.escape(target_url)}...\n200 OK\nContent-Length: 1234\nServer: nginx</pre><p><a href='/stage5'>Try again</a></p>"
 
 
 def build_attack_completion_report(client_ip=None):
@@ -1281,8 +1280,15 @@ def _run_apply_job(job_id, fixes_data):
             f"mismatched signatures, syntax errors, logic that no longer wires up), "
             f"fix those too — but touch nothing else.\n"
             f"5. If a snippet is wrong or incomplete, apply the minimal correct fix yourself.\n\n"
+            f"CRITICAL — Stage connection removal:\n"
+            f"- Each CTF stage endpoint currently redirects or links the user to the next stage upon a successful attack.\n"
+            f"- After applying the vulnerability fix, the stage must NO LONGER allow progression to the next stage.\n"
+            f"- Remove or replace every redirect, link, or response that moves the user from one stage to the next.\n"
+            f"- Replace any such progression with a plain 'Access Denied' or 'Invalid Input' response.\n"
+            f"- This applies to ALL stages being fixed in this file.\n"
+            f"- For Stage 1 specifically: remove the link or button that leads to Stage 2. The page must not provide any path forward to Stage 2 after the fix.\n\n"
             f"Rules — strictly enforced:\n"
-            f"- Only change what is needed to fix the vulnerabilities and any inconsistency they cause.\n"
+            f"- Only change what is needed to fix the vulnerabilities, remove stage progression, and resolve any inconsistency those changes cause.\n"
             f"- Do NOT refactor, rename, reformat, or touch any unrelated code.\n"
             f"- Preserve all routes, functions, logic, and structure exactly as they are.\n"
             f"- After all edits, verify the file is self-consistent from top to bottom.\n"
@@ -1538,8 +1544,15 @@ def verify_and_apply_fixes():
             f"mismatched signatures, syntax errors, logic that no longer wires up), "
             f"fix those too — but touch nothing else.\n"
             f"5. If a snippet is wrong or incomplete, apply the minimal correct fix yourself.\n\n"
+            f"CRITICAL — Stage connection removal:\n"
+            f"- Each CTF stage endpoint currently redirects or links the user to the next stage upon a successful attack.\n"
+            f"- After applying the vulnerability fix, the stage must NO LONGER allow progression to the next stage.\n"
+            f"- Remove or replace every redirect, link, or response that moves the user from one stage to the next.\n"
+            f"- Replace any such progression with a plain 'Access Denied' or 'Invalid Input' response.\n"
+            f"- This applies to ALL stages being fixed in this file.\n"
+            f"- For Stage 1 specifically: remove the link or button that leads to Stage 2. The page must not provide any path forward to Stage 2 after the fix.\n\n"
             f"Rules — strictly enforced:\n"
-            f"- Only change what is needed to fix the vulnerabilities and any inconsistency they cause.\n"
+            f"- Only change what is needed to fix the vulnerabilities, remove stage progression, and resolve any inconsistency those changes cause.\n"
             f"- Do NOT refactor, rename, reformat, or touch any unrelated code.\n"
             f"- Preserve all routes, functions, logic, and structure exactly as they are.\n"
             f"- After all edits, verify the file is self-consistent from top to bottom.\n"
