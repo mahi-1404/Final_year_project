@@ -1296,7 +1296,7 @@ def _run_apply_job(job_id, fixes_data):
             f"- Do not explain. Just read, verify, and apply."
         )
 
-        emit(f"[CLAUDE] Starting — sending prompt for {filepath}...", "info")
+        emit(f"[GEMINI] Starting — sending prompt for {filepath}...", "info")
 
         try:
             proc = subprocess.Popen(
@@ -1320,13 +1320,13 @@ def _run_apply_job(job_id, fixes_data):
                 for fx in file_fixes:
                     emit(f"[DONE] Stage {fx['stage']} ({fx['type']}) applied to {filepath}", "success")
             else:
-                emit(f"[ERROR] Claude exited with code {proc.returncode} for {filepath}", "error")
+                emit(f"[ERROR] Gemini exited with code {proc.returncode} for {filepath}", "error")
 
         except subprocess.TimeoutExpired:
             proc.kill()
-            emit(f"[ERROR] Claude CLI timed out for {filepath}", "error")
+            emit(f"[ERROR] Gemini API timed out for {filepath}", "error")
         except FileNotFoundError:
-            emit("[ERROR] 'claude' command not found — is Claude Code CLI installed and on PATH?", "error")
+            emit("[ERROR] 'claude' command not found — is Gemini CLI installed and on PATH?", "error")
             break
         except Exception as e:
             emit(f"[ERROR] {e}", "error")
@@ -1389,7 +1389,7 @@ def apply_window(job_id):
 <html>
 <head>
 <meta charset="UTF-8">
-<title>Claude — Applying Fixes</title>
+<title>Gemini — Applying Fixes</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: #0d1117; color: #c9d1d9; font-family: 'Courier New', monospace;
@@ -1421,11 +1421,11 @@ def apply_window(job_id):
 </head>
 <body>
 <div class="titlebar">
-  <h1>Claude Code — Live Fix Output</h1>
+  <h1>Gemini AI — Live Fix Output</h1>
   <span class="badge working" id="badge">Working...</span>
 </div>
 <div id="terminal"><span class="cursor"></span></div>
-<div class="statusbar" id="statusbar">Connecting to Claude...</div>
+<div class="statusbar" id="statusbar">Connecting to Gemini...</div>
 
 <script>
   const terminal = document.getElementById('terminal');
@@ -1447,8 +1447,8 @@ def apply_window(job_id):
   es.onmessage = function(e) {
     const msg = JSON.parse(e.data);
     if (msg.type === 'connected') {
-      appendLine('[CONNECTED] Waiting for Claude to start...', 'info');
-      statusbar.textContent = 'Claude CLI connected — running...';
+      appendLine('[CONNECTED] Waiting for Gemini to start...', 'info');
+      statusbar.textContent = 'Gemini API connected — running...';
     } else if (msg.type === 'heartbeat') {
       // silent keep-alive
     } else if (msg.type === 'done') {

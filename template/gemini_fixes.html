@@ -233,7 +233,7 @@
             letter-spacing: 0.04em;
             transition: background 0.2s;
         " onmouseover="this.style.background='#1f5438'" onmouseout="this.style.background='#276749'">
-            ⚙ Verify & Apply via Claude
+            ⚙ Verify & Apply via Gemini
         </button>
         <div id="applyStatus" style="margin-top: 12px; font-size: 0.85rem; color: #718096;"></div>
     </div>
@@ -360,17 +360,17 @@
             }
 
             btn.disabled = true;
-            btn.textContent = '⏳ Starting Claude...';
+            btn.textContent = '⏳ Starting Gemini...';
 
             // Open the window immediately on the user gesture — before any async work
             // so Chrome does not treat it as a blocked popup
             const win = window.open('', 'claude_apply', 'width=900,height=650,resizable=yes,scrollbars=yes');
             if (win) {
                 win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
-                    <title>Claude — Starting...</title>
+                    <title>Gemini — Starting...</title>
                     <style>body{background:#0d1117;color:#58a6ff;font-family:'Courier New',monospace;
                     padding:30px;font-size:14px}</style></head><body>
-                    <p>Connecting to Flask and starting Claude CLI job...</p>
+                    <p>Connecting to Flask and starting Gemini API job...</p>
                     <p style="color:#8b949e;margin-top:10px">Window will update automatically.</p>
                     </body></html>`);
             }
@@ -392,14 +392,14 @@
                     status.textContent = `Popup blocked — open manually: /apply_window/${jobId}`;
                 }
 
-                btn.textContent = '⚙ Verify & Apply via Claude';
+                btn.textContent = '⚙ Verify & Apply via Gemini';
                 btn.disabled = false;
-                status.textContent = `Claude is running — watch the output window (job: ${jobId}).`;
+                status.textContent = `Gemini is running — watch the output window (job: ${jobId}).`;
 
             } catch (err) {
                 if (win && !win.closed) win.close();
                 btn.disabled = false;
-                btn.textContent = '⚙ Verify & Apply via Claude';
+                btn.textContent = '⚙ Verify & Apply via Gemini';
                 status.textContent = 'Error: ' + err.message;
             }
         }
