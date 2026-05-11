@@ -9,3 +9,4 @@ __pycache__/
 log_month.txt
 ml_detection/__pycache__/
 ml_detection/ml_detection/
+.kilo/
