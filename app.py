@@ -1,4 +1,4 @@
-from flask import Flask, request, redirect, render_template, render_template_string, jsonify, Response
+from flask import Flask, request, redirect, render_template, render_template_string, jsonify, Response, session
 from dotenv import load_dotenv
 import logging
 
@@ -23,6 +23,7 @@ from pathlib import Path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'ml_detection'))
 
 app = Flask(__name__, template_folder='template', static_folder='static')
+app.secret_key = 'ctf-admin-secret-2024'
 
 # Import ML detector
 try:
@@ -1303,7 +1304,8 @@ def _run_apply_job(job_id, fixes_data):
             f"- Set session['stage2_done'] = True inside the /legacy_login POST handler ONLY when the attack is successfully detected (the if has_xss or has_ssti block).\n"
             f"- Set session['stage3_done'] = True inside the /profile POST handler ONLY when XXE is successfully detected.\n"
             f"- Set session['stage4_done'] = True inside the /verify_token POST handler ONLY when deserialization attack is successfully detected.\n"
-            f"- These session flags are the ONLY way to unlock the next stage. Typing the URL directly must always be blocked if the flag is not set.\n\n"
+            f"- These session flags are the ONLY way to unlock the next stage. Typing /stage2 through /stage5 directly in the URL must always be blocked if the flag is not set.\n"
+            f"- The ONLY URL that is exempt from session gating and can be accessed directly is /admin (it has its own authentication).\n\n"
             f"Rules — strictly enforced:\n"
             f"- Only change what is needed to fix the vulnerabilities, remove stage progression, and resolve any inconsistency those changes cause.\n"
             f"- Do NOT refactor, rename, reformat, or touch any unrelated code.\n"
@@ -1584,7 +1586,8 @@ def verify_and_apply_fixes():
             f"- Set session['stage2_done'] = True inside the /legacy_login POST handler ONLY when the attack is successfully detected (the if has_xss or has_ssti block).\n"
             f"- Set session['stage3_done'] = True inside the /profile POST handler ONLY when XXE is successfully detected.\n"
             f"- Set session['stage4_done'] = True inside the /verify_token POST handler ONLY when deserialization attack is successfully detected.\n"
-            f"- These session flags are the ONLY way to unlock the next stage. Typing the URL directly must always be blocked if the flag is not set.\n\n"
+            f"- These session flags are the ONLY way to unlock the next stage. Typing /stage2 through /stage5 directly in the URL must always be blocked if the flag is not set.\n"
+            f"- The ONLY URL that is exempt from session gating and can be accessed directly is /admin (it has its own authentication).\n\n"
             f"Rules — strictly enforced:\n"
             f"- Only change what is needed to fix the vulnerabilities, remove stage progression, and resolve any inconsistency those changes cause.\n"
             f"- Do NOT refactor, rename, reformat, or touch any unrelated code.\n"
@@ -1787,13 +1790,54 @@ def open_terminal():
     return jsonify({'status': 'ok'})
 
 
+_ADMIN_LOGIN_HTML = '''<!DOCTYPE html>
+<html>
+<head><title>Admin Login</title>
+<style>
+  body{margin:0;background:#0d1117;display:flex;justify-content:center;align-items:center;min-height:100vh;font-family:Arial,sans-serif;}
+  .box{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:40px 36px;width:320px;}
+  h2{color:#58a6ff;margin:0 0 24px;text-align:center;}
+  label{color:#8b949e;font-size:0.85rem;}
+  input{width:100%;box-sizing:border-box;background:#0d1117;border:1px solid #30363d;color:#e6edf3;padding:8px 10px;border-radius:5px;margin:6px 0 16px;font-size:0.9rem;}
+  button{width:100%;background:#238636;color:#fff;border:none;padding:10px;border-radius:5px;font-size:0.95rem;cursor:pointer;}
+  button:hover{background:#2ea043;}
+  .err{color:#f85149;font-size:0.82rem;margin-bottom:12px;text-align:center;}
+</style></head>
+<body><div class="box">
+  <h2>Admin Dashboard</h2>
+  {% if error %}<p class="err">{{ error }}</p>{% endif %}
+  <form method="POST">
+    <label>Username</label><input name="username" type="text" autocomplete="off">
+    <label>Password</label><input name="password" type="password">
+    <button type="submit">Login</button>
+  </form>
+</div></body></html>'''
+
+@app.route('/admin_login', methods=['GET', 'POST'])
+def admin_login():
+    if request.method == 'POST':
+        if request.form.get('username') == 'admin' and request.form.get('password') == 'admin':
+            session['admin_authenticated'] = True
+            return redirect('/admin')
+        return render_template_string(_ADMIN_LOGIN_HTML, error='Invalid credentials')
+    return render_template_string(_ADMIN_LOGIN_HTML, error=None)
+
+@app.route('/admin_logout')
+def admin_logout():
+    session.pop('admin_authenticated', None)
+    return redirect('/admin_login')
+
 @app.route('/admin')
 def admin_page():
+    if not session.get('admin_authenticated'):
+        return redirect('/admin_login')
     log_data = process_logs()
     return render_template('admin.html', **log_data)
 
 @app.route('/admin_data')
 def admin_data():
+    if not session.get('admin_authenticated'):
+        return jsonify({'error': 'Unauthorized'}), 401
     log_data = process_logs()
     return jsonify(log_data)
 
