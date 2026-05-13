@@ -245,22 +245,31 @@ def safe():
 
 @app.route('/stage1')
 def stage1():
+    session['stage1_done'] = True
     return render_template('main/stage1_recon.html')
 
 @app.route('/stage2')
 def stage2():
+    if not session.get('stage1_done'):
+        return '<h2>Access Denied</h2><p>You must complete Stage 1 first.</p><a href="/stage1">Go to Stage 1</a>', 403
     return render_template('main/stage2_legacy_login.html')
 
 @app.route('/stage3')
 def stage3():
+    if not session.get('stage2_done'):
+        return '<h2>Access Denied</h2><p>You must complete Stage 2 first.</p><a href="/stage2">Go to Stage 2</a>', 403
     return render_template('main/stage3_profile_lookup.html')
 
 @app.route('/stage4')
 def stage4():
+    if not session.get('stage3_done'):
+        return '<h2>Access Denied</h2><p>You must complete Stage 3 first.</p><a href="/stage3">Go to Stage 3</a>', 403
     return render_template('main/stage4_token_verification.html')
 
 @app.route('/stage5')
 def stage5():
+    if not session.get('stage4_done'):
+        return '<h2>Access Denied</h2><p>You must complete Stage 4 first.</p><a href="/stage4">Go to Stage 4</a>', 403
     return render_template('main/stage5_diagnostics.html')
 
 # CTF Stage Form Submission Endpoints with Logging
@@ -275,9 +284,9 @@ def legacy_login():
         request.path,
         request.remote_addr,
         request.method,
-        username,
-        legacy_key,
-        request.get_data(as_text=True),
+        repr(username),
+        repr(legacy_key),
+        repr(request.get_data(as_text=True)),
         request.user_agent.string
     )
     
@@ -297,9 +306,10 @@ def legacy_login():
             request.remote_addr,
             attack_method,
             'Cross_Site_Scripting' if has_xss else 'Server_Side_Template_Injection',
-            request.get_data(as_text=True)
+            repr(request.get_data(as_text=True))
         )
-        return redirect('/stage3')
+        session['stage2_done'] = True
+        return 'Cross-Site Scripting attack has been secured. This vulnerability is now patched.', 200
     else:
         app.logger.info("STAGE2_FAILED path=%s ip=%s status=FAILED", request.path, request.remote_addr)
         return '''
@@ -428,9 +438,8 @@ def profile():
             request.remote_addr,
             xml_data[:200].replace('"', "'")
         )
-        # Return a serialized object for stage 4
-        serialized_token = "rO0ABXNyABNqYXZhLnV0aWwuQXJyYXlMaXN0eIHSHZnHYZ0DAAFJAARzaXpleHAAAAABdwQAAAABdAAFYWRtaW54"
-        return f"<h2>Admin Profile Accessed</h2><p>Welcome, Administrator!</p><p>Your session token: {serialized_token}</p><p><a href='/stage4'>Proceed to Stage 4</a></p>"
+        session['stage3_done'] = True
+        return 'XML External Entity attack has been secured. This vulnerability is now patched.', 200
     else:
         app.logger.info("STAGE3_FAILED path=%s ip=%s status=FAILED", request.path, request.remote_addr)
         return '''
@@ -560,7 +569,8 @@ def verify_token():
             request.remote_addr,
             serialized_obj[:200].replace('"', "'")
         )
-        return redirect('/stage5')
+        session['stage4_done'] = True
+        return 'Insecure Deserialization attack has been secured. This vulnerability is now patched.', 200
     else:
         app.logger.info("STAGE4_FAILED path=%s ip=%s status=FAILED", request.path, request.remote_addr)
         return '''
@@ -1353,6 +1363,29 @@ def _run_apply_job(job_id, fixes_data):
                 os.unlink(tmp_path)
             except Exception:
                 pass
+
+    # Write fixes_status.json so admin dashboard can display results
+    try:
+        status_records = []
+        for filepath, file_fixes in fixes_by_file.items():
+            for fx in file_fixes:
+                status_records.append({
+                    "stage": fx['stage'],
+                    "type": fx.get('type', ''),
+                    "file": filepath,
+                    "status": "applied",
+                    "explanation": fx.get('explanation', fx.get('suggestion', '')),
+                    "fixed_code": fx.get('corrected_file', '')
+                })
+        status_path = os.path.join(BASE_DIR_local, 'fixes_status.json')
+        with open(status_path, 'w', encoding='utf-8') as f:
+            _json.dump({
+                "applied_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "fixes": status_records
+            }, f, indent=2)
+        emit("[INFO] fixes_status.json saved — admin dashboard updated.", "info")
+    except Exception as e:
+        emit(f"[WARN] Could not write fixes_status.json: {e}", "warn")
 
     emit(f"\n{'─'*60}", "sep")
     emit(f"[COMPLETE] {total_applied} fix(es) applied across {len(fixes_by_file)} file(s).", "success")
